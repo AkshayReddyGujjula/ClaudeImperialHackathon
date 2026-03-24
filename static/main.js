@@ -153,7 +153,7 @@ function initIntake() {
 
     hideErrorBanner();
     startBtn.disabled = true;
-    showSpinner();
+    showSpinner("Getting your first questions ready…");
 
     const body = { chief_complaint: complaint };
 
@@ -179,7 +179,11 @@ function initIntake() {
 
         setSession({
           session_id: data.session_id,
-          questions: data.questions,
+          // First batch of questions
+          currentBatchQuestions: data.questions,
+          allQaPairs: [],
+          batchNumber: 1,
+          hpcDone: data.done || false,
           demo: isDemo(),
         });
 
@@ -206,20 +210,32 @@ function initInterview() {
   if (!document.getElementById("answer")) return;
 
   const session = getSession();
-  if (!session || !session.questions || !session.session_id) {
+  if (!session || !session.session_id) {
+    window.location.href = "/";
+    return;
+  }
+
+  // Redirect if we somehow land here with no questions
+  if (!session.currentBatchQuestions || session.currentBatchQuestions.length === 0) {
     window.location.href = "/";
     return;
   }
 
   initSpeech("answer");
 
-  const questions = session.questions;
-  const answers = [];
-  let currentIndex = 0;
+  // ---- State ----
+  let currentBatchQuestions = session.currentBatchQuestions;  // questions in this batch
+  let currentBatchAnswers = [];                               // answers for this batch
+  let allQaPairs = session.allQaPairs || [];                  // all completed Q&A across batches
+  let batchNumber = session.batchNumber || 1;
+  let hpcDone = session.hpcDone || false;
+
   let phase = "hpc"; // "hpc" or "bias"
   let biasQuestions = [];
   let biasAnswers = [];
-  let lastHpcPayload = null;
+  let currentIndex = 0;
+
+  const TOTAL_BATCHES = 3;
 
   const questionEl = document.getElementById("question-text");
   const answerEl = document.getElementById("answer");
@@ -232,15 +248,11 @@ function initInterview() {
   const answerErrorEl = document.getElementById("answer-error");
 
   function currentQuestions() {
-    return phase === "hpc" ? questions : biasQuestions;
+    return phase === "hpc" ? currentBatchQuestions : biasQuestions;
   }
 
   function currentAnswers() {
-    return phase === "hpc" ? answers : biasAnswers;
-  }
-
-  function totalQuestions() {
-    return currentQuestions().length;
+    return phase === "hpc" ? currentBatchAnswers : biasAnswers;
   }
 
   function renderQuestion(idx) {
@@ -249,40 +261,94 @@ function initInterview() {
     answerEl.value = currentAnswers()[idx] || "";
     answerEl.focus();
 
-    const total = totalQuestions();
-    progressEl.textContent = `Question ${idx + 1} of ${total}`;
-    const pct = Math.round(((idx + 1) / total) * 100);
-    progressBar.style.width = pct + "%";
+    if (phase === "hpc") {
+      // Show batch-aware progress: "Part 1 of 3 — Question 2 of 3"
+      const batchTotal = qs.length;
+      progressEl.textContent = `Part ${batchNumber} of ${TOTAL_BATCHES} — Question ${idx + 1} of ${batchTotal}`;
 
-    backBtn.style.display = idx > 0 || phase === "bias" ? "inline-block" : "none";
-    nextBtn.textContent = idx === total - 1 ? (phase === "hpc" ? "Submit answers →" : "Build my timeline →") : "Next →";
+      // Overall progress across all batches
+      const completedQs = allQaPairs.length + idx;
+      const estimatedTotal = TOTAL_BATCHES * 3;
+      const pct = Math.min(Math.round((completedQs / estimatedTotal) * 100), 95);
+      progressBar.style.width = pct + "%";
+    } else {
+      const total = qs.length;
+      progressEl.textContent = `Additional question ${idx + 1} of ${total}`;
+      const pct = Math.round(((idx + 1) / total) * 100);
+      progressBar.style.width = pct + "%";
+    }
+
+    // Back button: only within current batch/phase
+    backBtn.style.display = (idx > 0 || phase === "bias") ? "inline-block" : "none";
+
+    // Next button label
+    const isLastInPhase = idx === currentQuestions().length - 1;
+    if (phase === "hpc") {
+      nextBtn.textContent = isLastInPhase ? "Submit answers →" : "Next →";
+    } else {
+      nextBtn.textContent = isLastInPhase ? "Build my timeline →" : "Next →";
+    }
     answerErrorEl.style.display = "none";
 
-    // Render previous Q&A
+    // Render previous Q&A accordion — all completed pairs + current batch prior answers
     prevQaEl.innerHTML = "";
-    const prevAnswers = currentAnswers().slice(0, idx);
-    if (prevAnswers.length > 0) {
-      prevAnswers.forEach((ans, i) => {
+
+    // All completed batches
+    if (allQaPairs.length > 0) {
+      allQaPairs.forEach(([q, a]) => {
+        if (!a) return;
+        const item = document.createElement("details");
+        item.className = "prev-qa-item";
+        item.innerHTML = `<summary>${q}</summary><p>${a}</p>`;
+        prevQaEl.appendChild(item);
+      });
+    }
+
+    // Current batch answers so far
+    if (phase === "hpc") {
+      currentBatchAnswers.slice(0, idx).forEach((ans, i) => {
         if (!ans) return;
         const item = document.createElement("details");
         item.className = "prev-qa-item";
-        item.innerHTML = `<summary>${qs[i]}</summary><p>${ans}</p>`;
+        item.innerHTML = `<summary>${currentBatchQuestions[i]}</summary><p>${ans}</p>`;
+        prevQaEl.appendChild(item);
+      });
+    } else {
+      biasAnswers.slice(0, idx).forEach((ans, i) => {
+        if (!ans) return;
+        const item = document.createElement("details");
+        item.className = "prev-qa-item";
+        item.innerHTML = `<summary>${biasQuestions[i]}</summary><p>${ans}</p>`;
         prevQaEl.appendChild(item);
       });
     }
   }
 
-  function submitHpc() {
+  function saveSessionState() {
+    setSession({
+      session_id: session.session_id,
+      currentBatchQuestions,
+      allQaPairs,
+      batchNumber,
+      hpcDone,
+      demo: session.demo,
+    });
+  }
+
+  function fetchNextBatch() {
     hideErrorBanner();
-    showSpinner("Analysing your responses…");
+    showSpinner("Thinking about what to ask next…");
     nextBtn.disabled = true;
 
-    lastHpcPayload = { session_id: session.session_id, answers: [...answers] };
+    const payload = {
+      session_id: session.session_id,
+      answers: [...currentBatchAnswers],
+    };
 
-    fetch("/submit-hpc" + demoSuffix(), {
+    fetch("/next-batch" + demoSuffix(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(lastHpcPayload),
+      body: JSON.stringify(payload),
     })
       .then((r) => r.json())
       .then((data) => {
@@ -295,7 +361,57 @@ function initInterview() {
         }
 
         if (data.error) {
-          showErrorBanner("Something went wrong processing your answers. Please try again.", () => submitHpc());
+          showErrorBanner("Something went wrong. Please try again.", fetchNextBatch);
+          return;
+        }
+
+        if (data.done) {
+          // HPC complete — move to submit-hpc
+          hpcDone = true;
+          saveSessionState();
+          submitHpc();
+        } else {
+          // Load next batch
+          allQaPairs = allQaPairs.concat(
+            currentBatchQuestions.map((q, i) => [q, currentBatchAnswers[i] || ""])
+          );
+          batchNumber++;
+          currentBatchQuestions = data.questions;
+          currentBatchAnswers = [];
+          currentIndex = 0;
+          saveSessionState();
+          renderQuestion(0);
+        }
+      })
+      .catch(() => {
+        hideSpinner();
+        nextBtn.disabled = false;
+        showErrorBanner("Something went wrong. Please try again.", fetchNextBatch);
+      });
+  }
+
+  function submitHpc() {
+    hideErrorBanner();
+    showSpinner("Analysing your responses…");
+    nextBtn.disabled = true;
+
+    fetch("/submit-hpc" + demoSuffix(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: session.session_id }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        hideSpinner();
+        nextBtn.disabled = false;
+
+        if (data.acute) {
+          showCrisisBanner();
+          return;
+        }
+
+        if (data.error) {
+          showErrorBanner("Something went wrong processing your answers. Please try again.", submitHpc);
           return;
         }
 
@@ -309,12 +425,13 @@ function initInterview() {
           phaseLabelEl.textContent = "A few more questions to make sure we haven't missed anything:";
         }
 
+        progressBar.style.width = "100%";
         renderQuestion(0);
       })
       .catch(() => {
         hideSpinner();
         nextBtn.disabled = false;
-        showErrorBanner("Something went wrong. Please try again.", () => submitHpc());
+        showErrorBanner("Something went wrong. Please try again.", submitHpc);
       });
   }
 
@@ -341,14 +458,14 @@ function initInterview() {
         }
 
         // Store results and redirect
-        const updated = { ...session, results: data };
+        const updated = { ...getSession(), results: data };
         setSession(updated);
         window.location.href = "/results" + demoSuffix();
       })
       .catch(() => {
         hideSpinner();
         nextBtn.disabled = false;
-        showErrorBanner("Something went wrong. Please try again.", () => submitBias());
+        showErrorBanner("Something went wrong. Please try again.", submitBias);
       });
   }
 
@@ -363,15 +480,26 @@ function initInterview() {
     const ans = currentAnswers();
     ans[currentIndex] = answer;
 
-    const total = totalQuestions();
+    const total = currentQuestions().length;
 
     if (currentIndex < total - 1) {
       currentIndex++;
       renderQuestion(currentIndex);
     } else {
-      // Last question in phase
+      // Last question in current batch/phase
       if (phase === "hpc") {
-        submitHpc();
+        // Save this batch's answers into allQaPairs temporarily for display,
+        // then decide: fetch next batch or go straight to submit-hpc
+        if (hpcDone || batchNumber >= TOTAL_BATCHES) {
+          // Final batch complete — flush to server
+          allQaPairs = allQaPairs.concat(
+            currentBatchQuestions.map((q, i) => [q, currentBatchAnswers[i] || ""])
+          );
+          saveSessionState();
+          submitHpc();
+        } else {
+          fetchNextBatch();
+        }
       } else {
         submitBias();
       }
@@ -383,12 +511,13 @@ function initInterview() {
       currentIndex--;
       renderQuestion(currentIndex);
     } else if (phase === "bias" && currentIndex === 0) {
-      // Go back to last HPC question
+      // Go back to last HPC question in the last batch
       phase = "hpc";
-      currentIndex = questions.length - 1;
+      currentIndex = currentBatchQuestions.length - 1;
       if (phaseLabelEl) phaseLabelEl.textContent = "Your symptom history";
       renderQuestion(currentIndex);
     }
+    // At the start of a non-first HPC batch, back is disabled — we don't re-fetch previous batches
   }
 
   nextBtn.addEventListener("click", handleNext);
@@ -403,6 +532,12 @@ function initInterview() {
 // ---------------------------------------------------------------------------
 // E. Results page
 // ---------------------------------------------------------------------------
+
+const CONFIDENCE_LABELS = {
+  exact: { label: "Exact timing", cls: "confidence-exact" },
+  approximate: { label: "Approximate timing", cls: "confidence-approximate" },
+  inferred: { label: "Estimated timing", cls: "confidence-inferred" },
+};
 
 function initResults() {
   if (!document.getElementById("timeline-container")) return;
@@ -500,6 +635,31 @@ function initResults() {
     if (hasBg) bgSection.style.display = "block";
   }
 
+  // Completeness score
+  const completeness = results.completeness;
+  const completenessSection = document.getElementById("completeness-section");
+  if (completeness && completenessSection) {
+    completenessSection.style.display = "block";
+    const scoreEl = document.getElementById("completeness-score-fill");
+    const scoreText = document.getElementById("completeness-score-text");
+    const missingList = document.getElementById("completeness-missing-list");
+
+    if (scoreEl) scoreEl.style.width = (completeness.score * 10) + "%";
+    if (scoreText) scoreText.textContent = `${completeness.score}/10`;
+
+    if (missingList && completeness.missing_dimensions && completeness.missing_dimensions.length > 0) {
+      completeness.missing_dimensions.forEach((dim) => {
+        const li = document.createElement("li");
+        li.textContent = dim;
+        missingList.appendChild(li);
+      });
+    } else if (missingList) {
+      const li = document.createElement("li");
+      li.textContent = "All key areas appear well-covered.";
+      missingList.appendChild(li);
+    }
+  }
+
   // Timeline render
   function renderTimeline() {
     const container = document.getElementById("timeline-container");
@@ -519,10 +679,15 @@ function initResults() {
       const weeksLabel = entry.weeks_ago === 0 ? "Today" : `${entry.weeks_ago} week${entry.weeks_ago !== 1 ? "s" : ""} ago`;
       const severityText = entry.severity != null ? ` (Severity: ${entry.severity}/10)` : "";
 
+      const conf = entry.confidence || "approximate";
+      const confInfo = CONFIDENCE_LABELS[conf] || CONFIDENCE_LABELS.approximate;
+      const confidenceBadge = `<span class="confidence-badge ${confInfo.cls}" title="${confInfo.label}">${confInfo.label}</span>`;
+
       div.innerHTML = `
         <div class="entry-badge">${weeksLabel}</div>
         <div class="entry-body">
           <span class="entry-desc">${entry.description}${severityText}</span>
+          ${confidenceBadge}
           <button class="btn-edit no-print" data-idx="${idx}">Edit</button>
         </div>
         <div class="entry-edit-form" style="display:none">

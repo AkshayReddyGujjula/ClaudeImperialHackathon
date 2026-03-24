@@ -24,7 +24,7 @@
       <h1>Your Symptom Summary</h1>
       <div class="results-actions no-print">
         <a id="export-link" href="#" target="_blank" class="btn-export">Export for my doctor</a>
-        <button id="copy-btn" class="btn-secondary">Copy to clipboard</button>
+        <button id="copy-btn" type="button" class="btn-secondary">Copy to clipboard</button>
         <a href="/" class="btn-secondary">Start again</a>
       </div>
     </div>
@@ -32,6 +32,19 @@
     <div id="partial-banner" class="partial-banner" style="display:none">
       We couldn't fully process your additional answers. Here's what we have — you can still export this summary.
     </div>
+
+    <!-- Completeness score — shown by JS if data available -->
+    <section id="completeness-section" class="completeness-section no-print" style="display:none">
+      <h3>Summary completeness</h3>
+      <div class="completeness-score-text" id="completeness-score-text"></div>
+      <div class="completeness-bar-container">
+        <div class="completeness-bar-fill" id="completeness-score-fill" style="width:0%"></div>
+      </div>
+      <div class="completeness-missing">
+        <strong>Topics to mention to your doctor:</strong>
+        <ul id="completeness-missing-list"></ul>
+      </div>
+    </section>
 
     <div id="export-content">
       <section class="summary-section">
@@ -65,6 +78,17 @@
     <p class="disclaimer no-print">
       This summary was created by the patient to help describe their symptoms. It is not a clinical assessment. Your doctor will review this information and make their own clinical judgement.
     </p>
+
+    <!-- Data transparency -->
+    <div class="data-transparency no-print">
+      <strong>About your data</strong>
+      <ul>
+        <li>Your responses are held in memory only and automatically deleted after 90 minutes.</li>
+        <li>Nothing is saved to a database or shared with anyone.</li>
+        <li>Your data leaves this tool only through the export you choose to create.</li>
+        <li>You can start again at any time to clear your session.</li>
+      </ul>
+    </div>
   </div>
 
   <script src="/static/main.js"></script>

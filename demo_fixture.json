@@ -1,24 +1,34 @@
 {
-  "call1_response": {
+  "batch1_response": {
     "questions": [
-      "When did you first start feeling exhausted — can you remember roughly what month or time of year it was?",
-      "How would you describe the exhaustion — is it a physical tiredness, or more like a lack of energy or motivation?",
-      "On a scale of 1 to 10, how bad is the exhaustion on a typical day? And at its worst?",
-      "Is the exhaustion constant throughout the day, or worse at certain times — like in the morning or after activity?",
-      "When did your knee pain start — was it around the same time as the exhaustion, or did it begin separately?",
-      "How would you describe the knee pain — is it a dull ache, sharp, stiff, or something else?",
-      "On a scale of 1 to 10, how bad is the knee pain? Does it vary throughout the day?",
-      "Is the knee pain constant, or does it come and go? Does it wake you up at night?",
-      "Does anything make the knee pain better or worse — for example, rest, movement, heat, or cold?",
-      "Have you noticed any swelling, warmth, or redness around your knees?"
-    ]
+      "When did your knee pain first start — roughly how long ago was that?",
+      "How would you describe the pain — is it a dull ache, sharp, or something else?",
+      "On a scale of 1 to 10, how bad is the knee pain at its worst, and at its best?"
+    ],
+    "done": false
+  },
+  "batch2_response": {
+    "questions": [
+      "Is the pain constant throughout the day, or does it come and go?",
+      "Does anything make the pain better or worse — for example, rest, movement, heat, or cold?",
+      "Did anything happen just before the pain started — like an injury, a change in activity, or a period of increased stress?"
+    ],
+    "done": false
+  },
+  "batch3_response": {
+    "questions": [
+      "Have you noticed any swelling, warmth, or redness around your knee?",
+      "Does the pain wake you up at night or stop you from doing activities you normally would?",
+      "Which knee is affected — or is it both?"
+    ],
+    "done": false
   },
   "call2_response": {
     "bias_questions": [
       "Have you noticed any changes to your weight recently — either up or down?",
       "Have you had any fevers or night sweats?",
       "Is there anyone in your family with similar symptoms or related conditions?",
-      "Any rashes, skin changes, or unusual marks on your body?"
+      "Any joint swelling or morning stiffness lasting more than 30 minutes?"
     ]
   },
   "call3_response": {

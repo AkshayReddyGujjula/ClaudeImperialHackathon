@@ -9,7 +9,30 @@
 <body>
   <div class="card">
     <h1>Symptom Timeline Builder</h1>
-    <p class="subtitle">Describe your symptoms in your own words. We'll help you turn them into a clear timeline to share with your doctor.</p>
+    <p class="subtitle">Take your time to describe what you've been experiencing. There are no wrong answers — the more detail you can give, the more useful your summary will be.</p>
+
+    <details class="info-panel no-print">
+      <summary>What does this tool do?</summary>
+      <div class="info-panel-body">
+        <div>
+          <h4 class="does">&#10003; What it does</h4>
+          <ul>
+            <li>Helps you organise your symptom history into a clear timeline</li>
+            <li>Creates a summary you can share with your doctor</li>
+            <li>Asks follow-up questions based on your answers</li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="does-not">&#10005; What it does NOT do</h4>
+          <ul>
+            <li>Diagnose conditions</li>
+            <li>Recommend treatments or medication</li>
+            <li>Replace professional medical advice</li>
+            <li>Store your data after your session ends</li>
+          </ul>
+        </div>
+      </div>
+    </details>
 
     <div id="error-banner" class="error-banner" style="display:none"></div>
 
@@ -21,14 +44,15 @@
           placeholder="Describe what brought you here today — in your own words"
           rows="5"
         ></textarea>
-        <button id="mic-btn" class="mic-btn" title="Speak your answer" style="display:none" aria-label="Start voice input">🎤</button>
+        <button id="mic-btn" type="button" class="mic-btn" title="Speak your answer" style="display:none" aria-label="Start voice input">🎤</button>
       </div>
+      <p class="language-hint">You can write in any language.</p>
     </div>
 
-    <button id="start-btn" class="btn-primary">Start &rarr;</button>
+    <button id="start-btn" type="button" class="btn-primary">Start &rarr;</button>
     <div id="spinner" class="spinner" style="display:none">
       <span class="spinner-dot"></span><span class="spinner-dot"></span><span class="spinner-dot"></span>
-      <span>Getting your questions ready…</span>
+      <span id="spinner-text">Getting your first questions ready…</span>
     </div>
 
     <p class="demo-link no-print">

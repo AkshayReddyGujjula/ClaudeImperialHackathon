@@ -13,6 +13,9 @@ def _strip_code_fences(raw: str) -> str:
     return cleaned
 
 
+_VALID_CONFIDENCE = {"exact", "approximate", "inferred"}
+
+
 def validate_and_sort_timeline(raw_json: str) -> dict:
     """
     Parse Claude Call 4 JSON output, validate timeline entries, sort by weeks_ago descending.
@@ -36,11 +39,30 @@ def validate_and_sort_timeline(raw_json: str) -> dict:
                 continue
             entry.setdefault("event_type", "symptom_onset")
             entry.setdefault("severity", None)
+            # Validate and default confidence field
+            confidence = entry.get("confidence", "approximate")
+            if confidence not in _VALID_CONFIDENCE:
+                confidence = "approximate"
+            entry["confidence"] = confidence
             valid_entries.append(entry)
 
         # Sort descending by weeks_ago (oldest first)
         valid_entries.sort(key=lambda e: e["weeks_ago"], reverse=True)
         data["timeline_entries"] = valid_entries
+
+        # Validate completeness object
+        completeness = data.get("completeness")
+        if completeness and isinstance(completeness, dict):
+            try:
+                completeness["score"] = int(completeness.get("score", 5))
+                completeness["score"] = max(1, min(10, completeness["score"]))
+                if not isinstance(completeness.get("missing_dimensions"), list):
+                    completeness["missing_dimensions"] = []
+            except (ValueError, TypeError):
+                data["completeness"] = None
+        else:
+            data["completeness"] = None
+
         return data
 
     except Exception:
@@ -57,5 +79,6 @@ def validate_and_sort_timeline(raw_json: str) -> dict:
                 "other": [],
             },
             "patient_quote": "",
+            "completeness": None,
             "_parse_error": True,
         }

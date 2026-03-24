@@ -2,7 +2,8 @@ import json
 import os
 import uuid
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 
 from flask import Flask, jsonify, render_template, request
 from dotenv import load_dotenv
@@ -11,7 +12,7 @@ import anthropic
 from safety_checks import keyword_acute_check, parse_safety_response
 from prompt_templates import (
     BIAS_REDUCTION_LIBRARY,
-    build_call1_prompt,
+    build_adaptive_batch_prompt,
     build_call2_prompt,
     build_call3_prompt,
     build_call4_prompt,
@@ -22,6 +23,7 @@ from export_formatter import build_export_context
 load_dotenv()
 
 app = Flask(__name__)
+app.config['JSON_AS_ASCII'] = False  # preserve Unicode characters in JSON responses
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 SESSION_TTL_MINUTES = 90
@@ -34,7 +36,7 @@ def _load_demo_fixture() -> dict:
     global _demo_fixture
     if _demo_fixture is None:
         fixture_path = os.path.join(os.path.dirname(__file__), "demo_fixture.json")
-        with open(fixture_path) as f:
+        with open(fixture_path, encoding='utf-8') as f:
             _demo_fixture = json.load(f)
     return _demo_fixture
 
@@ -70,7 +72,8 @@ def call_claude(prompt: str, max_tokens: int) -> str | None:
             messages=[{"role": "user", "content": prompt}],
         )
         return response.content[0].text
-    except Exception:
+    except Exception as e:
+        app.logger.error(f"Claude API error: {e}")
         return None
 
 
@@ -138,22 +141,26 @@ def start():
 
     if demo:
         fixture = _load_demo_fixture()
-        questions = fixture["call1_response"]["questions"]
+        questions = fixture["batch1_response"]["questions"]
+        batch_done = fixture["batch1_response"].get("done", False)
     else:
-        raw = call_claude(build_call1_prompt(chief_complaint), max_tokens=600)
+        raw = call_claude(build_adaptive_batch_prompt(chief_complaint, [], 1), max_tokens=400)
         if not raw:
             return jsonify({"error": "interview_failed"}), 500
         try:
             parsed = json.loads(_strip_fences(raw))
             questions = parsed["questions"]
+            batch_done = parsed.get("done", False)
         except Exception:
             return jsonify({"error": "interview_failed"}), 500
 
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
         "complaint": chief_complaint,
-        "questions": questions,
-        "hpc_answers": [],
+        "current_batch_questions": questions,
+        "all_qa": [],
+        "batch_number": 1,
+        "hpc_complete": batch_done,
         "bias_questions": [],
         "bias_answers": [],
         "call3_safety_cache": None,
@@ -162,7 +169,72 @@ def start():
         "demo": demo,
     }
 
-    return jsonify({"session_id": session_id, "questions": questions})
+    return jsonify({"session_id": session_id, "questions": questions, "done": batch_done})
+
+
+# ---------------------------------------------------------------------------
+# API: POST /next-batch
+# ---------------------------------------------------------------------------
+
+@app.route("/next-batch", methods=["POST"])
+def next_batch():
+    data = request.get_json(force=True)
+    session_id = data.get("session_id")
+    answers = data.get("answers", [])
+
+    session = sessions.get(session_id)
+    if not session:
+        return session_expired_response()
+
+    # Zip current batch questions with answers and accumulate
+    current_questions = session["current_batch_questions"]
+    pairs = list(zip(current_questions, answers))
+    session["all_qa"].extend(pairs)
+
+    # Layer 1: keyword check on new answers
+    joined_answers = " ".join(str(a) for a in answers)
+    if keyword_acute_check(joined_answers):
+        return jsonify({"acute": True})
+
+    next_batch_number = session["batch_number"] + 1
+    session["batch_number"] = next_batch_number
+
+    demo = session_is_demo(session)
+
+    # If we've reached the max batches, signal done
+    if next_batch_number > 3:
+        session["hpc_complete"] = True
+        return jsonify({"done": True})
+
+    if demo:
+        fixture = _load_demo_fixture()
+        batch_key = f"batch{next_batch_number}_response"
+        if batch_key not in fixture:
+            session["hpc_complete"] = True
+            return jsonify({"done": True})
+        batch_data = fixture[batch_key]
+        questions = batch_data["questions"]
+        batch_done = batch_data.get("done", False)
+    else:
+        raw = call_claude(
+            build_adaptive_batch_prompt(session["complaint"], session["all_qa"], next_batch_number),
+            max_tokens=400,
+        )
+        if not raw:
+            return jsonify({"error": "batch_failed"}), 500
+        try:
+            parsed = json.loads(_strip_fences(raw))
+            questions = parsed["questions"]
+            batch_done = parsed.get("done", False)
+        except Exception:
+            return jsonify({"error": "batch_failed"}), 500
+
+    if batch_done or not questions:
+        session["hpc_complete"] = True
+        return jsonify({"done": True})
+
+    session["current_batch_questions"] = questions
+    return jsonify({"questions": questions, "done": False})
 
 
 # ---------------------------------------------------------------------------
@@ -173,21 +245,23 @@ def start():
 def submit_hpc():
     data = request.get_json(force=True)
     session_id = data.get("session_id")
-    answers = data.get("answers", [])
+    # Optional final batch answers (if the last batch wasn't submitted via /next-batch)
+    final_answers = data.get("answers", [])
 
     session = sessions.get(session_id)
     if not session:
         return session_expired_response()
 
-    # Validate answer quality
-    for i, answer in enumerate(answers):
-        if len(str(answer).strip()) < 3:
-            return jsonify({"error": "answer_too_short", "index": i}), 400
+    # If there are final answers to flush, append them
+    if final_answers and session.get("current_batch_questions"):
+        current_questions = session["current_batch_questions"]
+        pairs = list(zip(current_questions, final_answers))
+        session["all_qa"].extend(pairs)
 
-    session["hpc_answers"] = answers
+    hpc_qa = session["all_qa"]
 
     # Layer 1: keyword check on all answers
-    joined_answers = " ".join(str(a) for a in answers)
+    joined_answers = " ".join(str(a) for q, a in hpc_qa)
     if keyword_acute_check(joined_answers):
         return jsonify({"acute": True})
 
@@ -202,12 +276,12 @@ def submit_hpc():
         with ThreadPoolExecutor(max_workers=2) as executor:
             future_bias = executor.submit(
                 call_claude,
-                build_call2_prompt(session["complaint"], answers, BIAS_REDUCTION_LIBRARY),
+                build_call2_prompt(session["complaint"], hpc_qa, BIAS_REDUCTION_LIBRARY),
                 400,
             )
             future_safety = executor.submit(
                 call_claude,
-                build_call3_prompt(session["complaint"], answers),
+                build_call3_prompt(session["complaint"], hpc_qa),
                 150,
             )
             raw_bias = future_bias.result(timeout=30)
@@ -258,15 +332,17 @@ def submit_bias():
 
     session["bias_answers"] = bias_answers
 
+    today_date = date.today().strftime("%d %B %Y")
+
     # Call 4 is ALWAYS live — even in demo mode
     raw = call_claude(
         build_call4_prompt(
             session["complaint"],
-            session["hpc_answers"],
+            session["all_qa"],
             bias_answers,
-            today_date="24 March 2026",
+            today_date=today_date,
         ),
-        max_tokens=1400,
+        max_tokens=1600,
     )
 
     if raw:
@@ -277,7 +353,6 @@ def submit_bias():
             return jsonify(results)
 
     # Fallback: use cached intermediate data
-    cache = session.get("call3_safety_cache") or {}
     fallback = {
         "timeline_entries": [],
         "chief_complaint_sentence": session.get("complaint", ""),
@@ -285,6 +360,7 @@ def submit_bias():
         "associated_symptoms": [],
         "background": {"family_history": None, "medications": None, "travel": None, "weight_changes": None, "other": []},
         "patient_quote": session.get("complaint", ""),
+        "completeness": None,
         "partial": True,
         "message": "We couldn't process your additional answers fully. Here's what we have — you can still export this summary.",
     }

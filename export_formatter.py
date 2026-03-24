@@ -19,8 +19,10 @@ def build_export_context(session: dict) -> dict:
         background_items["Weight changes"] = background["weight_changes"]
     other = background.get("other") or []
 
+    completeness = results.get("completeness")
+
     return {
-        "generated_date": "24 March 2026",
+        "generated_date": date.today().strftime("%d %B %Y"),
         "chief_complaint_sentence": results.get("chief_complaint_sentence", session.get("complaint", "")),
         "timeline_entries": timeline,
         "modifying_factors": results.get("modifying_factors", []),
@@ -29,4 +31,5 @@ def build_export_context(session: dict) -> dict:
         "background_other": other,
         "patient_quote": results.get("patient_quote", session.get("complaint", "")),
         "partial": results.get("partial", False),
+        "completeness": completeness,
     }

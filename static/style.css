@@ -525,7 +525,178 @@ textarea:focus {
 .export-background dt { font-weight: 600; margin-top: 0.4rem; }
 .export-background dd { margin-left: 1rem; color: var(--grey); }
 .export-footer { margin-top: 2rem; font-size: 0.75rem; color: var(--grey); text-align: center; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.export-missing-note { font-size: 0.85rem; color: var(--grey); margin-bottom: 0.4rem; }
+.export-confidence { font-size: 0.8rem; color: var(--grey); }
 .print-btn-row { text-align: center; margin: 1.5rem 0; display: flex; gap: 0.75rem; justify-content: center; }
+
+/* ---- Confidence badges ---- */
+.confidence-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.confidence-exact {
+  background: var(--green-light);
+  color: var(--green);
+  border: 1px solid #a3d9b8;
+}
+
+.confidence-approximate {
+  background: var(--blue-light);
+  color: var(--blue);
+  border: 1px solid #a8cfe8;
+}
+
+.confidence-inferred {
+  background: var(--orange-light);
+  color: var(--orange);
+  border: 1px dashed var(--orange);
+}
+
+/* ---- Completeness section ---- */
+.completeness-section {
+  background: var(--blue-light);
+  border: 1px solid #a8cfe8;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.completeness-section h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--blue);
+  margin-bottom: 0.5rem;
+}
+
+.completeness-bar-container {
+  background: #d0e8f5;
+  border-radius: 4px;
+  height: 10px;
+  margin: 0.4rem 0 0.6rem;
+  overflow: hidden;
+}
+
+.completeness-bar-fill {
+  background: var(--blue);
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.completeness-score-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--blue);
+  margin-bottom: 0.4rem;
+}
+
+.completeness-missing {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.completeness-missing strong {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--blue);
+}
+
+.completeness-missing ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+/* ---- "What this tool does" info panel on intake ---- */
+.info-panel {
+  margin-top: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+
+.info-panel summary {
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  color: var(--grey);
+  -webkit-user-select: none;
+  user-select: none;
+  font-weight: 600;
+  list-style: none;
+}
+
+.info-panel summary::-webkit-details-marker { display: none; }
+
+.info-panel summary::before {
+  content: "▶ ";
+  font-size: 0.7em;
+}
+
+.info-panel[open] summary::before {
+  content: "▼ ";
+}
+
+.info-panel-body {
+  padding: 0 0.9rem 0.75rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 1.5rem;
+}
+
+.info-panel-body ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--text);
+}
+
+.info-panel-body li { margin-bottom: 0.2rem; }
+
+.info-panel h4 {
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+  color: var(--text);
+}
+
+.info-panel h4.does { color: var(--green); }
+.info-panel h4.does-not { color: var(--red); }
+
+/* ---- Data transparency section ---- */
+.data-transparency {
+  margin-top: 1.5rem;
+  background: var(--grey-light);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  color: var(--grey);
+}
+
+.data-transparency strong {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--text);
+}
+
+.data-transparency ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.data-transparency li { margin-bottom: 0.2rem; }
+
+/* ---- Language hint ---- */
+.language-hint {
+  font-size: 0.8rem;
+  color: var(--grey);
+  margin-top: 0.35rem;
+}
 
 /* ---- Responsive ---- */
 @media (max-width: 600px) {
@@ -536,4 +707,5 @@ textarea:focus {
   .results-actions { flex-direction: column; align-items: stretch; }
   .entry-edit-form { flex-direction: column; align-items: stretch; }
   .edit-weeks { width: 100%; }
+  .info-panel-body { grid-template-columns: 1fr; }
 }
