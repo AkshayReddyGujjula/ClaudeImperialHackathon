@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"c:/Users/aksha/Desktop/Hackathons/Claude Hackathon Imperial/ClaudeImperialHackathon\" log --all --oneline --decorate)",
+      "Bash(git -C \"c:/Users/aksha/Desktop/Hackathons/Claude Hackathon Imperial/ClaudeImperialHackathon\" log -1 --format=\"Commit: %H%nAuthor: %an <%ae>%nDate: %ai%nMessage: %s\" ff48c50)",
+      "Bash(git -C \"c:/Users/aksha/Desktop/Hackathons/Claude Hackathon Imperial/ClaudeImperialHackathon\" remote -v)",
+      "Bash(pip install:*)",
+      "Bash(curl -s -X POST http://localhost:5000/start?demo=true -H \"Content-Type: application/json\" -d \"{\"\"chief_complaint\"\": \"\"I have been feeling exhausted for months and both my knees are painful\"\"}\")",
+      "Bash(python -m json.tool)",
+      "Bash(taskkill /F /IM python.exe)"
+    ]
+  }
+}

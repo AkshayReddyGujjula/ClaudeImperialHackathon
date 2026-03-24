@@ -1,0 +1,106 @@
+@media print {
+  @page {
+    size: A4;
+    margin: 20mm;
+  }
+
+  /* Hide non-essential elements */
+  .no-print,
+  .print-btn-row,
+  nav,
+  .demo-link,
+  .btn-edit,
+  .btn-export,
+  .btn-secondary,
+  .btn-primary,
+  .results-actions {
+    display: none !important;
+  }
+
+  /* Force readable typography */
+  body {
+    font-family: Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #000;
+    background: #fff;
+    padding: 0;
+    margin: 0;
+  }
+
+  h1 { font-size: 15pt; font-weight: bold; }
+  h2 { font-size: 13pt; font-weight: bold; }
+
+  /* No shadows or decorative backgrounds */
+  .card, .wide-card, .export-page {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+    max-width: 100%;
+  }
+
+  /* Timeline entries: no page break within */
+  .timeline-entry {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    border-left-width: 3px;
+    margin-bottom: 8pt;
+    padding: 6pt 8pt;
+    box-shadow: none;
+  }
+
+  .timeline-container::before {
+    display: none;
+  }
+
+  /* Crisis banner in print */
+  .crisis-banner {
+    background: #fff !important;
+    color: #c00 !important;
+    border: 2pt solid #c00;
+    page-break-inside: avoid;
+  }
+
+  /* Links: no underline, black */
+  a {
+    color: #000;
+    text-decoration: none;
+  }
+
+  /* Export footer pinned to bottom */
+  .export-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 8pt;
+    color: #666;
+    border-top: 0.5pt solid #ccc;
+    padding-top: 4pt;
+  }
+
+  /* Summary sections no top margin */
+  .summary-section {
+    page-break-inside: avoid;
+  }
+
+  /* Lists */
+  ul, ol { padding-left: 14pt; }
+  li { margin-bottom: 4pt; }
+
+  /* Disclaimer box */
+  .disclaimer-box {
+    border: 0.5pt solid #999;
+    background: #f5f5f5 !important;
+    padding: 6pt;
+    margin-bottom: 10pt;
+  }
+
+  /* Partial notice */
+  .partial-banner, .partial-notice {
+    border: 0.5pt solid #999;
+    background: #fff !important;
+    color: #555 !important;
+  }
+}

@@ -1,0 +1,215 @@
+Claude Builder Club Spring 2026 Hackathon
+Welcome!
+The most transformative innovations come from big ideas that reimagine what's possible. During your CBC hackathon, you’ll inspire your club members to use AI to tackle humanity’s biggest challenges.
+All 78 Claude Builder Club universities in 12 total countries: United States, United Kingdom, Canada, Ireland, Germany, Switzerland, India, Ghana, Nigeria, Uganda, Rwanda and Kenya will be participating in this Spring 2026 hackathon.
+The Challenge
+Anthropic CEO Dario Amodei wrote an essay titled "Machines of Loving Grace" about a future in which AI helps eliminate disease, expand opportunity, strengthen democracy, and help people find meaning. As Claude Builder Club members, you have the opportunity to play a role in making this future a reality. This term’s Hackathon theme is social impact but this is not a one size fits all approach. This guide includes suggestions for tracks but we empower you to modify them for your campus. The five areas of focus for this hackathon are:
+Biology & Physical Health - Make healthcare more accessible or help people manage physical health
+Neuroscience & Mental Health - Expand access to mental health support and understanding
+Economic Empowerment & Education - Remove barriers to learning and opportunity
+Governance & Collaboration - Help people participate in democracy or work together better
+Creative Flourishing - Amplify human creativity and help people find meaning
+Your projects should demonstrate how AI could genuinely contribute to humans flourishing while wrestling with the hard ethical questions. We want to see your thinking as much as your code.
+
+
+
+Agenda for the Hackathon:
+Introduction from 16:00 to 16:30
+Hackathon 16:30 to 19:00 (19:15 in case of technical issues)
+Judging 19:15 to 19:45
+Announcements of the winners 19:45 to 20:00
+Closing Remarks and How to get Claude Pro and API Credits 20:00 to 20:30
+
+Submission via Devpost
+https://claude-hackathon-at-imperial.devpost.com/?preview_token=QO9ucQfZUlsLDeLhQEC6jI8wZ4GZ%2FQm7LcF3LhTfKeY%3D 
+
+Feel free to ask a question
+
+Bohdan Yermakov
+Claude Ambassador
+
+https://www.linkedin.com/in/bohdan-yermakov/ 
+
+
+
+
+
+Your Judges
+
+
+Lorenzo Bernasconi
+Forward Deployed Engineer at Anthropic
+https://www.linkedin.com/in/lorenzo-bernasconi-552983197/ 
+
+
+Professor William Proud
+Professor in Physics, Imperial College London
+w.proud@imperial.ac.uk 
+https://www.linkedin.com/in/william-g-proud-2a3a3013/ 
+
+
+Simon Kelly
+Senior OpenLink Endur Business Analyst, Mercuria
+https://www.linkedin.com/in/simon-kelly-2328592a/ 
+
+
+Maria Borysova
+Senior Product Designer, Amazon
+https://www.linkedin.com/in/maria-borysova/ 
+
+
+
+Burak M. Gunduz
+Quant Trader at B2C2
+https://www.linkedin.com/in/burakmgunduz/ 
+
+
+Jamie Croucher
+Director and Co-Founder of SoTA
+https://www.linkedin.com/in/jamie-c7/ 
+
+
+
+Oleksiy Dzenis
+Associate Professor in Economics,
+Simon Kuznets Kharkiv National University of Economics
+https://www.linkedin.com/in/oleksiy-dzenis-6357163b9 
+
+
+Daniel Virin
+Analytics & Sales, Bloomberg
+https://www.linkedin.com/in/daniel-virin/ 
+
+
+Ying Wang
+Strategic Advisor & Consultant, FLYG Consulting
+https://www.linkedin.com/in/yingwang1113/ 
+Universal Principles (applies to all tracks)
+What we're looking for:
+●       Solutions to real problems for specific people (not hypothetical problems for "everyone")
+●       AI that empowers people rather than replacing or diminishing them
+●       Deep thought about who benefits, who might be harmed, and what safeguards are needed
+●       Working prototypes that demonstrate core functionality
+●       Teams that clearly understand both the problem and their approach
+What judges will evaluate:
+●       Impact Potential (25 pts): Does this solve a real problem? Who benefits and how? Could it scale?
+●       Technical Execution (30 pts): Does it work? Is it well-built? Effective use of AI?
+●       Ethical Alignment (25 pts): Centers human dignity? Addresses potential harms? Expands access equitably?
+●       Presentation (20 pts): Can you clearly explain what you built and why it matters?
+Please scroll for the official rubric
+Critical questions every team must answer:
+●       Who are you building this for and why do they need it?
+●       What could go wrong and what would you do about it?
+●       How does this help people rather than make decisions for them?
+
+
+
+Getting Started
+Pick your track based on your expertise and what you are passionate about
+Define the specific problem - who faces it and why it matters
+Build a working prototype that demonstrates your core idea
+Test your assumptions - talk to potential users if possible
+Think through what could go wrong and build in safeguards
+Prepare to explain your thinking as much as your code 
+Tracks
+Track 1: Biology and Physical Health
+How do you improve access to healthcare, accelerate diagnosis and treatment, or help people manage physical health conditions?
+The problem: Healthcare is expensive, inaccessible, and confusing. Medical knowledge that could help people is locked behind jargon and paywalls. Billions lack access to quality care, and even those with access struggle to navigate complex systems.
+Examples:
+●       Diagnostic aids for underserved clinics
+●       Patient education platforms
+●       Medication adherence tools
+●       Symptom assessment and triage
+●       Health literacy for treatment decisions
+●       Accessibility tools for people with disabilities navigating healthcare
+Track-specific ethical considerations:
+●       Medical accuracy - when should this hand off to a real professional?
+●       Privacy of deeply sensitive health data
+●       Bias in medical AI across different populations
+●       Transparency about limitations and when professional care is needed
+
+Track 2: Neuroscience & Mental Health
+How can you expand access to mental health support, help people understand their mental health, or provide evidence-based therapeutic tools?
+The problem: Mental health support is severely inadequate. There aren't enough therapists, stigma prevents people from seeking help, quality care is gatekept by insurance and geography, and many people suffer without understanding what's happening to them or how to get help.
+Examples:
+●       Always-available therapeutic support using evidence-based approaches 
+●       Mental health literacy and psychoeducation
+●       Tools for recognizing when you need professional help
+●       Stress and burnout prevention
+●       Peer support facilitation
+●       Accessibility tools for neurodivergent individuals
+Track-specific ethical considerations:
+●       Crisis situations - when does someone need immediate human intervention?
+●       Privacy and stigma around mental health data
+●       Avoiding harm through bad psychological advice
+●       Cultural competence in mental health approaches
+●       Transparency about what AI therapy can and can't do
+●       Not replacing human connection when it's needed
+ 
+
+ 
+
+
+Track 3: Economic Empowerment & Education
+How can you help people learn, gain skills, find opportunities, or improve their economic situation - especially people currently locked out?
+The problem: Opportunity isn't equal. Quality education and economic advancement are gatekept by geography, wealth, and language. Talent is universal, but access to support isn't.
+Examples:
+●       Adaptive tutoring 
+●       Career transition guidance 
+●       Financial literacy for underserved communities
+●       Job interview prep
+●       Small business/nonprofit support
+●       Scholarship matching
+●       Practical language learning
+Track-specific ethical considerations:
+●       Who gets excluded by your design (tech requirements, literacy levels, language)?
+●       Impact of bad advice when guiding careers or education
+●       Empowering informed choices vs. making choices for people
+●       Cultural assumptions about what "success" means
+ 
+
+
+
+
+ 
+Track 4: Governance & Collaboration
+How can you help people participate in democracy, work together across differences, or make collective decisions better?
+The problem: Democratic institutions are strained. Polarization makes productive dialogue difficult. Civic participation is down because people feel powerless or confused. Communities can't coordinate around shared challenges.
+Examples:
+●       Community deliberation platforms 
+●       Policy explanation tools 
+●       Legislative transparency
+●       Grassroots organizing support 
+●       Participatory budgeting
+●       Conflict mediation
+●       Nonpartisan voter education
+Track-specific ethical considerations:
+●       How could this be weaponized for manipulation or suppressing dissent?
+●       Whose voices get centered vs. drowned out?
+●       Handling factual disputes (facilitating dialogue vs. "both-sidesing" reality)
+●       Privacy in civic participation
+●       Transparency in how recommendations are made
+ 
+
+ 
+
+
+
+Track 5: Creative Flourishing
+Build something that amplifies human creativity, helps people find meaning, or supports cultural expression and preservation.
+The problem: As AI handles routine work, questions about human purpose become urgent. Access to creative development and cultural preservation isn't equal. People who could find meaning through creative expression often don't get the chance.
+Examples:
+●       Community storytelling platforms
+●       Music/art education with real-time feedback 
+●       Writing development tools
+●       Language preservation
+●       Skill development for crafts/instruments
+●       Intergenerational knowledge exchange
+●       Purpose exploration guides
+Track-specific ethical considerations:
+●       Keeping humans as creators using tools (not AI as creator with human prompter)
+●       Enhancing vs. short-cutting the creative process in ways that diminish it
+●       Cultural appropriation vs. respectful celebration
+●       Homogenization of creative voices
+●       Creating vs. destroying value for creative workers
+

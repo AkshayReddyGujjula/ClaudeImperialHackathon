@@ -1,0 +1,28 @@
+{
+  "call1_response": {
+    "questions": [
+      "When did you first start feeling exhausted — can you remember roughly what month or time of year it was?",
+      "How would you describe the exhaustion — is it a physical tiredness, or more like a lack of energy or motivation?",
+      "On a scale of 1 to 10, how bad is the exhaustion on a typical day? And at its worst?",
+      "Is the exhaustion constant throughout the day, or worse at certain times — like in the morning or after activity?",
+      "When did your knee pain start — was it around the same time as the exhaustion, or did it begin separately?",
+      "How would you describe the knee pain — is it a dull ache, sharp, stiff, or something else?",
+      "On a scale of 1 to 10, how bad is the knee pain? Does it vary throughout the day?",
+      "Is the knee pain constant, or does it come and go? Does it wake you up at night?",
+      "Does anything make the knee pain better or worse — for example, rest, movement, heat, or cold?",
+      "Have you noticed any swelling, warmth, or redness around your knees?"
+    ]
+  },
+  "call2_response": {
+    "bias_questions": [
+      "Have you noticed any changes to your weight recently — either up or down?",
+      "Have you had any fevers or night sweats?",
+      "Is there anyone in your family with similar symptoms or related conditions?",
+      "Any rashes, skin changes, or unusual marks on your body?"
+    ]
+  },
+  "call3_response": {
+    "acute_symptoms_detected": false,
+    "red_flag_category": null
+  }
+}

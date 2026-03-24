@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Symptom Timeline Builder</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="card">
+    <h1>Symptom Timeline Builder</h1>
+    <p class="subtitle">Describe your symptoms in your own words. We'll help you turn them into a clear timeline to share with your doctor.</p>
+
+    <div id="error-banner" class="error-banner" style="display:none"></div>
+
+    <div class="field-group">
+      <label for="complaint">What brought you here today?</label>
+      <div class="textarea-wrapper">
+        <textarea
+          id="complaint"
+          placeholder="Describe what brought you here today — in your own words"
+          rows="5"
+        ></textarea>
+        <button id="mic-btn" class="mic-btn" title="Speak your answer" style="display:none" aria-label="Start voice input">🎤</button>
+      </div>
+    </div>
+
+    <button id="start-btn" class="btn-primary">Start &rarr;</button>
+    <div id="spinner" class="spinner" style="display:none">
+      <span class="spinner-dot"></span><span class="spinner-dot"></span><span class="spinner-dot"></span>
+      <span>Getting your questions ready…</span>
+    </div>
+
+    <p class="demo-link no-print">
+      <a href="/?demo=true">Run demo mode</a>
+    </p>
+  </div>
+
+  <script src="/static/main.js"></script>
+</body>
+</html>

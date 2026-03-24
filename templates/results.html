@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Symptom Timeline Builder — Your Summary</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/print.css">
+</head>
+<body>
+  <!-- Crisis banner — hardcoded -->
+  <div id="crisis-banner" class="crisis-banner" style="display:none">
+    <h2>⚠️ This may need urgent attention.</h2>
+    <p>If you are experiencing any of the following <strong>RIGHT NOW</strong>, stop and seek help immediately:</p>
+    <p>Chest pain or difficulty breathing &middot; Sudden severe headache<br>
+    Sudden confusion or slurred speech &middot; Heavy bleeding or trauma</p>
+    <p class="crisis-actions">
+      <strong>Call 999</strong> &middot; <strong>Call NHS 111</strong> &middot; <strong>Go to your nearest A&amp;E</strong>
+    </p>
+  </div>
+
+  <div id="results-container" class="card wide-card">
+    <div class="results-header no-print">
+      <h1>Your Symptom Summary</h1>
+      <div class="results-actions no-print">
+        <a id="export-link" href="#" target="_blank" class="btn-export">Export for my doctor</a>
+        <button id="copy-btn" class="btn-secondary">Copy to clipboard</button>
+        <a href="/" class="btn-secondary">Start again</a>
+      </div>
+    </div>
+
+    <div id="partial-banner" class="partial-banner" style="display:none">
+      We couldn't fully process your additional answers. Here's what we have — you can still export this summary.
+    </div>
+
+    <div id="export-content">
+      <section class="summary-section">
+        <h2>Chief Complaint</h2>
+        <p id="chief-complaint-text" class="chief-complaint-text"></p>
+        <blockquote id="patient-quote" class="patient-quote"></blockquote>
+      </section>
+
+      <section class="summary-section">
+        <h2>Symptom Timeline</h2>
+        <p class="timeline-hint no-print">Oldest events at the top. Click <strong>Edit</strong> to correct any entry.</p>
+        <div id="timeline-container" class="timeline-container"></div>
+      </section>
+
+      <section id="modifying-section" class="summary-section" style="display:none">
+        <h2>Modifying Factors</h2>
+        <ul id="modifying-list"></ul>
+      </section>
+
+      <section id="associated-section" class="summary-section" style="display:none">
+        <h2>Associated Symptoms</h2>
+        <ul id="associated-list"></ul>
+      </section>
+
+      <section id="background-section" class="summary-section" style="display:none">
+        <h2>Relevant Background</h2>
+        <dl id="background-list"></dl>
+      </section>
+    </div>
+
+    <p class="disclaimer no-print">
+      This summary was created by the patient to help describe their symptoms. It is not a clinical assessment. Your doctor will review this information and make their own clinical judgement.
+    </p>
+  </div>
+
+  <script src="/static/main.js"></script>
+</body>
+</html>

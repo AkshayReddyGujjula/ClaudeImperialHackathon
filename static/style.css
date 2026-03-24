@@ -1,0 +1,539 @@
+/* ============================================================
+   Symptom Timeline Builder — style.css
+   ============================================================ */
+
+:root {
+  --blue: #1d6fa4;
+  --blue-light: #e8f4fb;
+  --orange: #e07b29;
+  --orange-light: #fdf3e7;
+  --red: #d63b3b;
+  --red-light: #fdecea;
+  --green: #2e8b57;
+  --green-light: #e9f7ef;
+  --grey: #6b7280;
+  --grey-light: #f3f4f6;
+  --text: #1a1a2e;
+  --border: #d1d5db;
+  --radius: 8px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  background: #f8fafc;
+  color: var(--text);
+  line-height: 1.6;
+  padding: 1.5rem 1rem;
+  min-height: 100vh;
+}
+
+/* ---- Card ---- */
+.card {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 2rem;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.wide-card {
+  max-width: 860px;
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--blue);
+  margin-bottom: 0.5rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--text);
+}
+
+.subtitle {
+  color: var(--grey);
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+
+/* ---- Fields ---- */
+.field-group {
+  margin-bottom: 1.25rem;
+}
+
+label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.textarea-wrapper {
+  position: relative;
+}
+
+textarea {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 3rem 0.75rem 0.75rem;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.15s;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(29,111,164,0.12);
+}
+
+/* ---- Mic button ---- */
+.mic-btn {
+  position: absolute;
+  bottom: 0.6rem;
+  right: 0.6rem;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: var(--blue-light);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: background 0.15s;
+}
+
+.mic-btn:hover { background: #c8e6f5; }
+.mic-btn.listening { background: var(--red-light); animation: pulse 1s infinite; }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(214,59,59,0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(214,59,59,0); }
+}
+
+/* ---- Buttons ---- */
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.65rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary:hover:not(:disabled) { background: #155d8a; }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-secondary {
+  background: #fff;
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 1.2rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: border-color 0.15s;
+}
+
+.btn-secondary:hover { border-color: var(--blue); color: var(--blue); }
+
+.btn-export {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.65rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: background 0.15s;
+}
+
+.btn-export:hover { background: #246b44; }
+
+.btn-edit {
+  font-size: 0.78rem;
+  color: var(--grey);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+.btn-edit:hover { border-color: var(--blue); color: var(--blue); }
+
+.btn-save-edit {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.btn-cancel-edit {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  margin-left: 0.4rem;
+}
+
+.btn-retry {
+  background: none;
+  border: 1px solid #fff;
+  color: #fff;
+  border-radius: 4px;
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  margin-left: 0.75rem;
+}
+
+.btn-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* ---- Spinner ---- */
+.spinner {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--grey);
+  font-size: 0.9rem;
+  margin-top: 0.75rem;
+}
+
+.spinner-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--blue);
+  border-radius: 50%;
+  animation: bounce 1.2s infinite ease-in-out;
+}
+
+.spinner-dot:nth-child(2) { animation-delay: 0.15s; }
+.spinner-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* ---- Error banner ---- */
+.error-banner {
+  background: #fdecea;
+  border: 1px solid var(--red);
+  color: var(--red);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.answer-error {
+  color: var(--orange);
+  font-size: 0.85rem;
+  margin-top: 0.3rem;
+}
+
+/* ---- Crisis banner ---- */
+.crisis-banner {
+  background: var(--red);
+  color: #fff;
+  padding: 2rem;
+  text-align: center;
+  max-width: 700px;
+  margin: 2rem auto;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.crisis-banner h2 { font-size: 1.4rem; margin-bottom: 1rem; color: #fff; }
+.crisis-banner p { margin-bottom: 0.75rem; }
+.crisis-actions { font-size: 1.1rem; font-weight: 700; margin-top: 1rem; }
+
+/* ---- Interview progress ---- */
+.phase-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--blue);
+  margin-bottom: 0.25rem;
+}
+
+.progress-indicator {
+  font-size: 0.85rem;
+  color: var(--grey);
+  margin-bottom: 0.5rem;
+}
+
+.progress-bar-container {
+  height: 4px;
+  background: var(--grey-light);
+  border-radius: 2px;
+  margin-bottom: 1.25rem;
+}
+
+.progress-bar {
+  height: 4px;
+  background: var(--blue);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.question-text {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.previous-qa {
+  margin-bottom: 1rem;
+}
+
+.prev-qa-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  font-size: 0.875rem;
+}
+
+.prev-qa-item summary {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  color: var(--grey);
+  list-style: none;
+}
+
+.prev-qa-item summary::marker { display: none; }
+.prev-qa-item p { padding: 0.5rem 0.75rem; color: var(--text); }
+
+/* ---- Results ---- */
+.results-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.results-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.partial-banner {
+  background: var(--orange-light);
+  border: 1px solid var(--orange);
+  color: #7a4a10;
+  border-radius: var(--radius);
+  padding: 0.65rem 1rem;
+  font-size: 0.875rem;
+  margin-bottom: 1.25rem;
+}
+
+.summary-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.summary-section:first-of-type { border-top: none; }
+
+.chief-complaint-text {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.patient-quote {
+  border-left: 3px solid var(--blue);
+  padding-left: 1rem;
+  color: var(--grey);
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
+.timeline-hint {
+  font-size: 0.8rem;
+  color: var(--grey);
+  margin-bottom: 0.75rem;
+}
+
+/* ---- Timeline ---- */
+.timeline-container {
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.timeline-container::before {
+  content: "";
+  position: absolute;
+  left: 0.4rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+  border-radius: 1px;
+}
+
+.timeline-entry {
+  position: relative;
+  margin-bottom: 1rem;
+  border-left: 4px solid var(--grey);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  padding: 0.75rem 1rem;
+}
+
+.timeline-entry::before {
+  content: "";
+  position: absolute;
+  left: -1.75rem;
+  top: 0.85rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+  border: 2px solid #fff;
+}
+
+/* Colour coding by event_type */
+.type-symptom-onset  { border-color: var(--blue); }
+.type-symptom-onset::before { background: var(--blue); }
+
+.type-symptom-progression { border-color: var(--orange); }
+.type-symptom-progression::before { background: var(--orange); }
+
+.type-new-symptom { border-color: var(--red); }
+.type-new-symptom::before { background: var(--red); }
+
+.type-medical-event { border-color: var(--green); }
+.type-medical-event::before { background: var(--green); }
+
+.type-lifestyle-factor { border-color: var(--grey); }
+.type-lifestyle-factor::before { background: var(--grey); }
+
+.entry-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--grey);
+  margin-bottom: 0.25rem;
+}
+
+.entry-body {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.entry-desc { flex: 1; font-size: 0.925rem; }
+
+.entry-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.edit-desc {
+  flex: 1;
+  min-width: 180px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.edit-weeks {
+  width: 75px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.no-entries { color: var(--grey); font-size: 0.9rem; }
+
+/* ---- Disclaimer ---- */
+.disclaimer {
+  font-size: 0.8rem;
+  color: var(--grey);
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+/* ---- Demo link ---- */
+.demo-link { margin-top: 2rem; font-size: 0.8rem; color: var(--grey); text-align: center; }
+.demo-link a { color: var(--grey); }
+
+/* ---- Export page ---- */
+.export-page { max-width: 720px; margin: 0 auto; padding: 2rem; font-size: 0.9rem; }
+.export-header { margin-bottom: 1.25rem; border-bottom: 2px solid var(--text); padding-bottom: 0.75rem; }
+.export-header h1 { font-size: 1.4rem; }
+.export-date { color: var(--grey); font-size: 0.85rem; }
+.disclaimer-box { background: var(--grey-light); border-radius: 4px; padding: 0.65rem 0.9rem; font-size: 0.8rem; margin-bottom: 1.25rem; }
+.partial-notice { background: var(--orange-light); border-radius: 4px; padding: 0.5rem 0.75rem; font-size: 0.8rem; margin-bottom: 1rem; }
+.export-section { margin-bottom: 1.25rem; }
+.export-section h2 { font-size: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 0.6rem; }
+.export-timeline { list-style: disc inside; padding-left: 0; }
+.export-timeline-item { margin-bottom: 0.5rem; line-height: 1.5; }
+.export-weeks { font-weight: 600; margin-right: 0.3rem; }
+.export-quote { border-left: 3px solid var(--blue); padding-left: 0.75rem; font-style: italic; color: var(--grey); }
+.export-background dt { font-weight: 600; margin-top: 0.4rem; }
+.export-background dd { margin-left: 1rem; color: var(--grey); }
+.export-footer { margin-top: 2rem; font-size: 0.75rem; color: var(--grey); text-align: center; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.print-btn-row { text-align: center; margin: 1.5rem 0; display: flex; gap: 0.75rem; justify-content: center; }
+
+/* ---- Responsive ---- */
+@media (max-width: 600px) {
+  body { padding: 0.75rem 0.5rem; }
+  .card, .wide-card { padding: 1.25rem; }
+  h1 { font-size: 1.4rem; }
+  .results-header { flex-direction: column; }
+  .results-actions { flex-direction: column; align-items: stretch; }
+  .entry-edit-form { flex-direction: column; align-items: stretch; }
+  .edit-weeks { width: 100%; }
+}

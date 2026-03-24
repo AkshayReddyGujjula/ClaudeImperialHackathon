@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Symptom Timeline Builder — Interview</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- Crisis banner — hardcoded, never AI-generated -->
+  <div id="crisis-banner" class="crisis-banner" style="display:none">
+    <h2>⚠️ This may need urgent attention.</h2>
+    <p>If you are experiencing any of the following <strong>RIGHT NOW</strong>, stop and seek help immediately:</p>
+    <p>Chest pain or difficulty breathing &middot; Sudden severe headache<br>
+    Sudden confusion or slurred speech &middot; Heavy bleeding or trauma</p>
+    <p class="crisis-actions">
+      <strong>Call 999</strong> &middot; <strong>Call NHS 111</strong> &middot; <strong>Go to your nearest A&amp;E</strong>
+    </p>
+  </div>
+
+  <div id="interview-container" class="card">
+    <div id="phase-label" class="phase-label">Your symptom history</div>
+    <div id="progress-indicator" class="progress-indicator">Question 1 of 10</div>
+    <div id="progress-bar-container" class="progress-bar-container">
+      <div id="progress-bar" class="progress-bar" style="width:10%"></div>
+    </div>
+
+    <!-- Previous Q&A accordion -->
+    <div id="previous-qa" class="previous-qa"></div>
+
+    <!-- Current question -->
+    <div id="question-text" class="question-text"></div>
+
+    <div class="field-group">
+      <div class="textarea-wrapper">
+        <textarea
+          id="answer"
+          placeholder="Type your answer here…"
+          rows="4"
+        ></textarea>
+        <button id="mic-btn" class="mic-btn" title="Speak your answer" style="display:none" aria-label="Start voice input">🎤</button>
+      </div>
+      <div id="answer-error" class="answer-error" style="display:none">
+        Please describe this a little more — the more detail you give, the more useful your summary will be.
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button id="back-btn" class="btn-secondary" style="display:none">&larr; Back</button>
+      <button id="next-btn" class="btn-primary">Next &rarr;</button>
+    </div>
+
+    <div id="spinner" class="spinner" style="display:none">
+      <span class="spinner-dot"></span><span class="spinner-dot"></span><span class="spinner-dot"></span>
+      <span id="spinner-text">Analysing your responses…</span>
+    </div>
+
+    <div id="error-banner" class="error-banner" style="display:none">
+      <span id="error-text"></span>
+      <button id="retry-btn" class="btn-retry">Try again</button>
+    </div>
+  </div>
+
+  <script src="/static/main.js"></script>
+</body>
+</html>
