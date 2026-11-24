@@ -69,14 +69,43 @@ function hideSpinner() {
   if (spinner) spinner.style.display = "none";
 }
 
-function showCrisisBanner() {
+function revealCrisisBanner() {
+  const banner = document.getElementById("crisis-banner");
+  if (banner) banner.style.display = "block";
+  return banner;
+}
+
+function showCrisisBanner(resume, buttonLabel = "Continue anyway") {
+  const banner = revealCrisisBanner();
+  if (!banner) return;
+
   const container = document.querySelector("#intake-container, #interview-container, #results-container");
   if (container) container.style.display = "none";
-  const banner = document.getElementById("crisis-banner");
-  if (banner) {
-    banner.style.display = "block";
-    banner.focus({ preventScroll: true });
-    banner.scrollIntoView({ behavior: "smooth" });
+
+  const button = document.getElementById("crisis-continue-btn");
+  button.hidden = !resume;
+  button.onclick = null;
+  if (resume) {
+    button.textContent = buttonLabel;
+    button.onclick = () => {
+      button.hidden = true;
+      button.onclick = null;
+      if (container) container.style.display = "";
+      resume();
+    };
+  }
+
+  banner.focus({ preventScroll: true });
+  banner.scrollIntoView({ behavior: "smooth" });
+}
+
+function pauseForUrgentWarning(data, resume) {
+  if (data.continuation_token) {
+    showCrisisBanner(() => resume(data.continuation_token));
+  } else if (data.retry_safety_check) {
+    showCrisisBanner(() => resume(), "Retry safety check");
+  } else {
+    showCrisisBanner();
   }
 }
 
@@ -146,19 +175,22 @@ function initIntake() {
   const complaintEl = document.getElementById("complaint");
 
   function doStart() {
-    if (startBtn.disabled) return;
-
     const complaint = complaintEl.value.trim();
     if (complaint.length < 3) {
       showErrorBanner("Please describe your symptoms before continuing.");
       return;
     }
+    requestStart(complaint);
+  }
+
+  function requestStart(complaint, urgentToken) {
+    if (startBtn.disabled) return;
 
     hideErrorBanner();
     startBtn.disabled = true;
     showSpinner("Getting your first questions ready…");
 
-    const body = { chief_complaint: complaint };
+    const body = { chief_complaint: complaint, urgent_token: urgentToken };
 
     fetch("/start" + demoSuffix(), {
       method: "POST",
@@ -171,7 +203,7 @@ function initIntake() {
         startBtn.disabled = false;
 
         if (data.acute) {
-          showCrisisBanner();
+          pauseForUrgentWarning(data, (token) => requestStart(complaint, token));
           return;
         }
 
@@ -188,6 +220,7 @@ function initIntake() {
           batchNumber: 1,
           hpcDone: data.done || false,
           demo: isDemo(),
+          urgentWarning: Boolean(urgentToken),
         });
 
         window.location.href = "/interview" + demoSuffix();
@@ -227,6 +260,7 @@ function initInterview() {
   }
 
   initSpeech("answer");
+  if (session.urgentWarning) revealCrisisBanner();
 
   // ---- State ----
   let currentBatchQuestions = session.currentBatchQuestions;  // questions in this batch
@@ -298,16 +332,17 @@ function initInterview() {
     // Render previous Q&A accordion — all completed pairs + current batch prior answers
     prevQaEl.innerHTML = "";
 
-    // All completed batches
-    if (allQaPairs.length > 0) {
-      allQaPairs.forEach(([q, a]) => {
-        if (!a) return;
-        const item = document.createElement("details");
-        item.className = "prev-qa-item";
-        item.innerHTML = `<summary>${q}</summary><p>${a}</p>`;
-        prevQaEl.appendChild(item);
-      });
+    const previousPairs = [...allQaPairs];
+    if (phase === "bias") {
+      previousPairs.push(...currentBatchQuestions.map((q, i) => [q, currentBatchAnswers[i]]));
     }
+    previousPairs.forEach(([q, a]) => {
+      if (!a) return;
+      const item = document.createElement("details");
+      item.className = "prev-qa-item";
+      item.innerHTML = `<summary>${q}</summary><p>${a}</p>`;
+      prevQaEl.appendChild(item);
+    });
 
     // Current batch answers so far
     if (phase === "hpc") {
@@ -337,18 +372,32 @@ function initInterview() {
       batchNumber,
       hpcDone,
       demo: session.demo,
+      urgentWarning: session.urgentWarning,
     });
   }
 
-  function fetchNextBatch() {
+  function pauseInterview(data, resume) {
+    pauseForUrgentWarning(data, (token) => {
+      if (token) {
+        session.urgentWarning = true;
+        setSession({ ...getSession(), urgentWarning: true });
+      }
+      resume(token);
+    });
+  }
+
+  function fetchNextBatch(answers = [...currentBatchAnswers], urgentToken) {
     hideErrorBanner();
     showSpinner("Thinking about what to ask next…");
     nextBtn.disabled = true;
 
     const payload = {
       session_id: session.session_id,
-      answers: [...currentBatchAnswers],
+      batch_number: batchNumber,
+      answers,
+      urgent_token: urgentToken,
     };
+    const retry = () => fetchNextBatch(answers, urgentToken);
 
     fetch("/next-batch" + demoSuffix(), {
       method: "POST",
@@ -361,12 +410,12 @@ function initInterview() {
         nextBtn.disabled = false;
 
         if (data.acute) {
-          showCrisisBanner();
+          pauseInterview(data, (token) => fetchNextBatch(answers, token));
           return;
         }
 
         if (data.error) {
-          showErrorBanner("Something went wrong. Please try again.", fetchNextBatch);
+          showErrorBanner("Something went wrong. Please try again.", retry);
           return;
         }
 
@@ -374,11 +423,11 @@ function initInterview() {
           // HPC complete — move to submit-hpc
           hpcDone = true;
           saveSessionState();
-          submitHpc();
+          submitHpc(answers);
         } else {
           // Load next batch
           allQaPairs = allQaPairs.concat(
-            currentBatchQuestions.map((q, i) => [q, currentBatchAnswers[i] || ""])
+            currentBatchQuestions.map((q, i) => [q, answers[i] || ""])
           );
           batchNumber++;
           currentBatchQuestions = data.questions;
@@ -391,19 +440,20 @@ function initInterview() {
       .catch(() => {
         hideSpinner();
         nextBtn.disabled = false;
-        showErrorBanner("Something went wrong. Please try again.", fetchNextBatch);
+        showErrorBanner("Something went wrong. Please try again.", retry);
       });
   }
 
-  function submitHpc() {
+  function submitHpc(answers, urgentToken) {
     hideErrorBanner();
     showSpinner("Analysing your responses…");
     nextBtn.disabled = true;
+    const retry = () => submitHpc(answers, urgentToken);
 
     fetch("/submit-hpc" + demoSuffix(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: session.session_id }),
+      body: JSON.stringify({ session_id: session.session_id, answers, urgent_token: urgentToken }),
     })
       .then((r) => r.json())
       .then((data) => {
@@ -411,12 +461,12 @@ function initInterview() {
         nextBtn.disabled = false;
 
         if (data.acute) {
-          showCrisisBanner();
+          pauseInterview(data, (token) => submitHpc(answers, token || urgentToken));
           return;
         }
 
         if (data.error) {
-          showErrorBanner("Something went wrong processing your answers. Please try again.", submitHpc);
+          showErrorBanner("Something went wrong processing your answers. Please try again.", retry);
           return;
         }
 
@@ -436,16 +486,16 @@ function initInterview() {
       .catch(() => {
         hideSpinner();
         nextBtn.disabled = false;
-        showErrorBanner("Something went wrong. Please try again.", submitHpc);
+        showErrorBanner("Something went wrong. Please try again.", retry);
       });
   }
 
-  function submitBias() {
+  function submitBias(answers = [...biasAnswers], urgentToken) {
     hideErrorBanner();
     showSpinner("Building your timeline…");
     nextBtn.disabled = true;
 
-    const payload = { session_id: session.session_id, bias_answers: [...biasAnswers] };
+    const payload = { session_id: session.session_id, bias_answers: answers, urgent_token: urgentToken };
 
     fetch("/submit-bias" + demoSuffix(), {
       method: "POST",
@@ -456,6 +506,11 @@ function initInterview() {
       .then((data) => {
         hideSpinner();
         nextBtn.disabled = false;
+
+        if (data.acute && data.continuation_token) {
+          pauseInterview(data, (token) => submitBias(answers, token));
+          return;
+        }
 
         if (data.error && data.error === "session_expired") {
           showErrorBanner("Your session has expired. " + (data.message || "Please start again."));
@@ -470,11 +525,13 @@ function initInterview() {
       .catch(() => {
         hideSpinner();
         nextBtn.disabled = false;
-        showErrorBanner("Something went wrong. Please try again.", submitBias);
+        showErrorBanner("Something went wrong. Please try again.", () => submitBias(answers, urgentToken));
       });
   }
 
   function handleNext() {
+    if (nextBtn.disabled) return;
+
     const answer = answerEl.value.trim();
     if (answer.length < 3) {
       answerErrorEl.style.display = "block";
@@ -493,15 +550,8 @@ function initInterview() {
     } else {
       // Last question in current batch/phase
       if (phase === "hpc") {
-        // Save this batch's answers into allQaPairs temporarily for display,
-        // then decide: fetch next batch or go straight to submit-hpc
         if (hpcDone || batchNumber >= TOTAL_BATCHES) {
-          // Final batch complete — flush to server
-          allQaPairs = allQaPairs.concat(
-            currentBatchQuestions.map((q, i) => [q, currentBatchAnswers[i] || ""])
-          );
-          saveSessionState();
-          submitHpc();
+          submitHpc([...currentBatchAnswers]);
         } else {
           fetchNextBatch();
         }
@@ -512,6 +562,8 @@ function initInterview() {
   }
 
   function handleBack() {
+    if (nextBtn.disabled) return;
+
     if (currentIndex > 0) {
       currentIndex--;
       renderQuestion(currentIndex);
@@ -560,6 +612,7 @@ function initResults() {
     showCrisisBanner();
     return;
   }
+  if (session.urgentWarning) revealCrisisBanner();
 
   // Partial notice
   if (results.partial) {

@@ -4,10 +4,13 @@ import uuid
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
+from hashlib import sha256
+from threading import Lock
 
 from flask import Flask, jsonify, render_template, request
 from dotenv import load_dotenv
 import anthropic
+from itsdangerous import BadData, URLSafeTimedSerializer
 
 from safety_checks import keyword_acute_check, parse_safety_response
 from prompt_templates import (
@@ -28,6 +31,8 @@ client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 SESSION_TTL_MINUTES = 90
 sessions: dict = {}
+urgent_tokens = URLSafeTimedSerializer(os.urandom(32), salt="medi-scribe-urgent-warning")
+batch_commit_lock = Lock()
 
 # Load demo fixture once at startup
 _demo_fixture = None
@@ -57,6 +62,26 @@ def session_expired_response():
         "error": "session_expired",
         "message": "Your session has expired. Please start again."
     }), 410
+
+
+def require_urgent_acknowledgement(data: dict, *scope):
+    """Pause only this step and bind its acknowledgement to the submitted input."""
+    fingerprint = sha256(json.dumps(scope, sort_keys=True).encode()).hexdigest()
+    token = data.get("urgent_token")
+    if isinstance(token, str):
+        try:
+            if urgent_tokens.loads(token, max_age=SESSION_TTL_MINUTES * 60) == fingerprint:
+                return None
+        except BadData:
+            pass
+    return jsonify({"acute": True, "continuation_token": urgent_tokens.dumps(fingerprint)})
+
+
+def repeat_or_reject_batch(session: dict, batch_number: int, answers: list):
+    previous = session.get("last_batch_submission")
+    if previous and previous["batch"] == batch_number and previous["answers"] == answers:
+        return jsonify(previous["response"])
+    return jsonify({"error": "batch_changed"}), 409
 
 
 # ---------------------------------------------------------------------------
@@ -136,13 +161,14 @@ def start():
     if not chief_complaint:
         return jsonify({"error": "missing_complaint"}), 400
 
-    # Layer 1: keyword acute check
+    demo = is_demo_request()
+
     if keyword_acute_check(chief_complaint):
-        return jsonify({"acute": True})
+        warning = require_urgent_acknowledgement(data, "start", demo, chief_complaint)
+        if warning is not None:
+            return warning
 
     cleanup_sessions()
-
-    demo = is_demo_request()
 
     if demo:
         fixture = _load_demo_fixture()
@@ -191,55 +217,56 @@ def next_batch():
     if not session:
         return session_expired_response()
 
-    # Zip current batch questions with answers and accumulate
-    current_questions = session["current_batch_questions"]
-    pairs = list(zip(current_questions, answers))
-    session["all_qa"].extend(pairs)
+    current_batch = session["batch_number"]
+    submitted_batch = data.get("batch_number", current_batch)
+    if submitted_batch != current_batch:
+        return repeat_or_reject_batch(session, submitted_batch, answers)
 
-    # Layer 1: keyword check on new answers
-    joined_answers = " ".join(str(a) for a in answers)
-    if keyword_acute_check(joined_answers):
-        return jsonify({"acute": True})
+    if keyword_acute_check(" ".join(str(a) for a in answers)):
+        warning = require_urgent_acknowledgement(data, "next-batch", session_id, current_batch, answers)
+        if warning is not None:
+            return warning
 
-    next_batch_number = session["batch_number"] + 1
-    session["batch_number"] = next_batch_number
+    pairs = list(zip(session["current_batch_questions"], answers))
+    hpc_qa = session["all_qa"] + pairs
+    next_batch_number = current_batch + 1
+    questions = []
+    batch_done = True
 
-    demo = session_is_demo(session)
+    if next_batch_number <= 3:
+        if session_is_demo(session):
+            batch_data = _load_demo_fixture().get(f"batch{next_batch_number}_response")
+            if batch_data:
+                questions = batch_data["questions"]
+                batch_done = batch_data.get("done", False)
+        else:
+            raw = call_claude(
+                build_adaptive_batch_prompt(session["complaint"], hpc_qa, next_batch_number),
+                max_tokens=400,
+            )
+            if not raw:
+                return jsonify({"error": "batch_failed"}), 500
+            try:
+                parsed = json.loads(_strip_fences(raw))
+                questions = parsed["questions"]
+                batch_done = parsed.get("done", False)
+            except Exception:
+                return jsonify({"error": "batch_failed"}), 500
 
-    # If we've reached the max batches, signal done
-    if next_batch_number > 3:
-        session["hpc_complete"] = True
-        return jsonify({"done": True})
-
-    if demo:
-        fixture = _load_demo_fixture()
-        batch_key = f"batch{next_batch_number}_response"
-        if batch_key not in fixture:
-            session["hpc_complete"] = True
-            return jsonify({"done": True})
-        batch_data = fixture[batch_key]
-        questions = batch_data["questions"]
-        batch_done = batch_data.get("done", False)
+    done = batch_done or not questions
+    result = {"done": True} if done else {"questions": questions, "done": False}
+    batch_submission = {"batch": current_batch, "answers": answers, "response": result}
+    updates = {"batch_number": next_batch_number, "last_batch_submission": batch_submission}
+    if done:
+        updates.update(hpc_complete=True, final_hpc_qa=pairs)
     else:
-        raw = call_claude(
-            build_adaptive_batch_prompt(session["complaint"], session["all_qa"], next_batch_number),
-            max_tokens=400,
-        )
-        if not raw:
-            return jsonify({"error": "batch_failed"}), 500
-        try:
-            parsed = json.loads(_strip_fences(raw))
-            questions = parsed["questions"]
-            batch_done = parsed.get("done", False)
-        except Exception:
-            return jsonify({"error": "batch_failed"}), 500
+        updates.update(all_qa=hpc_qa, current_batch_questions=questions)
 
-    if batch_done or not questions:
-        session["hpc_complete"] = True
-        return jsonify({"done": True})
-
-    session["current_batch_questions"] = questions
-    return jsonify({"questions": questions, "done": False})
+    with batch_commit_lock:
+        if session["batch_number"] != current_batch:
+            return repeat_or_reject_batch(session, current_batch, answers)
+        session.update(updates)
+    return jsonify(result)
 
 
 # ---------------------------------------------------------------------------
@@ -250,25 +277,23 @@ def next_batch():
 def submit_hpc():
     data = request.get_json(force=True)
     session_id = data.get("session_id")
-    # Optional final batch answers (if the last batch wasn't submitted via /next-batch)
     final_answers = data.get("answers", [])
 
     session = sessions.get(session_id)
     if not session:
         return session_expired_response()
 
-    # If there are final answers to flush, append them
-    if final_answers and session.get("current_batch_questions"):
-        current_questions = session["current_batch_questions"]
-        pairs = list(zip(current_questions, final_answers))
-        session["all_qa"].extend(pairs)
+    saved_final_qa = session.get("final_hpc_qa", [])
+    final_qa = saved_final_qa
+    if final_answers:
+        final_qa = list(zip(session["current_batch_questions"], final_answers))
+    hpc_qa = session["all_qa"] + final_qa
+    urgent_scope = ("submit-hpc", session_id, hpc_qa)
 
-    hpc_qa = session["all_qa"]
-
-    # Layer 1: keyword check on all answers
-    joined_answers = " ".join(str(a) for q, a in hpc_qa)
-    if keyword_acute_check(joined_answers):
-        return jsonify({"acute": True})
+    if final_qa != saved_final_qa and keyword_acute_check(" ".join(str(a) for _, a in final_qa)):
+        warning = require_urgent_acknowledgement(data, *urgent_scope)
+        if warning is not None:
+            return warning
 
     demo = session_is_demo(session)
 
@@ -292,31 +317,28 @@ def submit_hpc():
             raw_bias = future_bias.result(timeout=30)
             safety_raw = future_safety.result(timeout=30)
 
-        if not raw_bias or not safety_raw:
-            return jsonify({"error": "processing_failed"}), 500
-
         try:
-            bias_parsed = json.loads(_strip_fences(raw_bias))
-            bias_questions = bias_parsed["bias_questions"]
-        except Exception:
-            return jsonify({"error": "processing_failed"}), 500
+            bias_questions = json.loads(_strip_fences(raw_bias))["bias_questions"] if raw_bias else None
+        except (TypeError, ValueError, KeyError):
+            bias_questions = None
 
-    # Layer 2 + 3: safety classifier
-    if not safety_raw:
-        return jsonify({"acute": True})
+    safety_result = parse_safety_response(safety_raw)
+    if safety_result is None:
+        return jsonify({"acute": True, "retry_safety_check": True})
+    if safety_result["acute_symptoms_detected"]:
+        warning = require_urgent_acknowledgement(data, *urgent_scope)
+        if warning is not None:
+            return warning
 
-    acute = parse_safety_response(safety_raw)
+    if not isinstance(bias_questions, list) or not bias_questions:
+        return jsonify({"error": "processing_failed"}), 500
 
-    # Cache safety result in session
-    try:
-        session["call3_safety_cache"] = json.loads(_strip_fences(safety_raw))
-    except Exception:
-        session["call3_safety_cache"] = {"acute_symptoms_detected": acute}
-
-    if acute:
-        return jsonify({"acute": True})
-
-    session["bias_questions"] = bias_questions
+    session.update(
+        final_hpc_qa=final_qa,
+        call3_safety_cache=safety_result,
+        bias_questions=bias_questions,
+        hpc_complete=True,
+    )
 
     return jsonify({"bias_questions": bias_questions, "acute": False})
 
@@ -335,6 +357,11 @@ def submit_bias():
     if not session:
         return session_expired_response()
 
+    if keyword_acute_check(" ".join(str(a) for a in bias_answers)):
+        warning = require_urgent_acknowledgement(data, "submit-bias", session_id, bias_answers)
+        if warning is not None:
+            return warning
+
     session["bias_answers"] = bias_answers
 
     today_date = date.today().strftime("%d %B %Y")
@@ -343,7 +370,7 @@ def submit_bias():
     raw = call_claude(
         build_call4_prompt(
             session["complaint"],
-            session["all_qa"],
+            session["all_qa"] + session.get("final_hpc_qa", []),
             bias_answers,
             today_date=today_date,
         ),

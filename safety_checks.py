@@ -37,11 +37,8 @@ def keyword_acute_check(text: str) -> bool:
     return any(keyword in lowered for keyword in ACUTE_KEYWORDS)
 
 
-def parse_safety_response(raw: str) -> bool:
-    """
-    Layer 3: Parse Call 3 JSON output and extract acute_symptoms_detected.
-    Fail-safe: missing field or parse failure → returns True.
-    """
+def parse_safety_response(raw: str) -> dict | None:
+    """Return a valid classifier result, or None when its decision cannot be verified."""
     try:
         # Strip markdown code fences if present
         cleaned = raw.strip()
@@ -51,8 +48,8 @@ def parse_safety_response(raw: str) -> bool:
                 cleaned = cleaned[4:]
             cleaned = cleaned.strip()
         data = json.loads(cleaned)
-        if "acute_symptoms_detected" not in data:
-            return True  # fail-safe
-        return bool(data["acute_symptoms_detected"])
-    except Exception:
-        return True  # fail-safe
+        if isinstance(data, dict) and isinstance(data.get("acute_symptoms_detected"), bool):
+            return data
+    except (AttributeError, IndexError, ValueError):
+        pass
+    return None

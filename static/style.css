@@ -283,6 +283,9 @@ textarea:focus {
 .crisis-banner h2 { font-size: 1.4rem; margin-bottom: 1rem; color: #fff; }
 .crisis-banner p { margin-bottom: 0.75rem; }
 .crisis-actions { font-size: 1.1rem; font-weight: 700; margin-top: 1rem; }
+.crisis-actions a { color: inherit; }
+.crisis-continue { margin-top: 0.5rem; }
+.crisis-continue[hidden] { display: none; }
 
 /* ---- Interview progress ---- */
 .phase-label {
