@@ -70,11 +70,12 @@ function hideSpinner() {
 }
 
 function showCrisisBanner() {
-  const container = document.getElementById("interview-container") || document.getElementById("results-container");
+  const container = document.querySelector("#intake-container, #interview-container, #results-container");
   if (container) container.style.display = "none";
   const banner = document.getElementById("crisis-banner");
   if (banner) {
     banner.style.display = "block";
+    banner.focus({ preventScroll: true });
     banner.scrollIntoView({ behavior: "smooth" });
   }
 }
@@ -145,6 +146,8 @@ function initIntake() {
   const complaintEl = document.getElementById("complaint");
 
   function doStart() {
+    if (startBtn.disabled) return;
+
     const complaint = complaintEl.value.trim();
     if (complaint.length < 3) {
       showErrorBanner("Please describe your symptoms before continuing.");
@@ -198,7 +201,9 @@ function initIntake() {
 
   startBtn.addEventListener("click", doStart);
   complaintEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && e.ctrlKey) doStart();
+    if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+    e.preventDefault();
+    if (!e.repeat) doStart();
   });
 }
 

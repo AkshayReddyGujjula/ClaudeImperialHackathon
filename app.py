@@ -66,12 +66,17 @@ def session_expired_response():
 def call_claude(prompt: str, max_tokens: int) -> str | None:
     try:
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model="claude-haiku-5-5",
             max_tokens=max_tokens,
-            temperature=0.3,
+            output_config={"effort": "low"},
+            thinking={"type": "disabled"},
             messages=[{"role": "user", "content": prompt}],
         )
-        return response.content[0].text
+        return "".join(
+            block.text
+            for block in response.content
+            if block.type == "text"
+        ) or None
     except Exception as e:
         app.logger.error(f"Claude API error: {e}")
         return None

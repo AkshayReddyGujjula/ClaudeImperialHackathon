@@ -8,16 +8,7 @@
   <link rel="stylesheet" href="/static/print.css">
 </head>
 <body>
-  <!-- Crisis banner — hardcoded -->
-  <div id="crisis-banner" class="crisis-banner" style="display:none">
-    <h2>⚠️ This may need urgent attention.</h2>
-    <p>If you are experiencing any of the following <strong>RIGHT NOW</strong>, stop and seek help immediately:</p>
-    <p>Chest pain or difficulty breathing &middot; Sudden severe headache<br>
-    Sudden confusion or slurred speech &middot; Heavy bleeding or trauma</p>
-    <p class="crisis-actions">
-      <strong>Call 999</strong> &middot; <strong>Call NHS 111</strong> &middot; <strong>Go to your nearest A&amp;E</strong>
-    </p>
-  </div>
+  {% include "crisis_banner.html" %}
 
   <div id="results-container" class="card wide-card">
     <div class="results-header no-print">
