@@ -24,13 +24,13 @@ function clearSession() {
   sessionStorage.removeItem(STB_KEY);
 }
 
-function isDemo() {
-  return new URLSearchParams(window.location.search).get("demo") === "true"
-    || (getSession() || {}).demo === true;
+function demoInUrl() {
+  return new URLSearchParams(window.location.search).get("demo") === "true";
 }
 
 function demoSuffix() {
-  return isDemo() ? "?demo=true" : "";
+  const demo = demoInUrl() || (getSession() || {}).demo === true;
+  return demo ? "?demo=true" : "";
 }
 
 function showErrorBanner(msg, retryFn) {
@@ -42,12 +42,12 @@ function showErrorBanner(msg, retryFn) {
   banner.style.display = "block";
 
   const retryBtn = document.getElementById("retry-btn");
-  if (retryBtn && retryFn) {
-    retryBtn.style.display = "inline-block";
-    retryBtn.onclick = () => {
-      banner.style.display = "none";
+  if (retryBtn) {
+    retryBtn.style.display = retryFn ? "inline-block" : "none";
+    retryBtn.onclick = retryFn ? () => {
+      hideErrorBanner();
       retryFn();
-    };
+    } : null;
   }
 }
 
@@ -173,6 +173,8 @@ function initIntake() {
 
   const startBtn = document.getElementById("start-btn");
   const complaintEl = document.getElementById("complaint");
+  const demo = demoInUrl();
+  const suffix = demo ? "?demo=true" : "";
 
   function doStart() {
     const complaint = complaintEl.value.trim();
@@ -192,7 +194,7 @@ function initIntake() {
 
     const body = { chief_complaint: complaint, urgent_token: urgentToken };
 
-    fetch("/start" + demoSuffix(), {
+    fetch("/start" + suffix, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -219,11 +221,11 @@ function initIntake() {
           allQaPairs: [],
           batchNumber: 1,
           hpcDone: data.done || false,
-          demo: isDemo(),
+          demo,
           urgentWarning: Boolean(urgentToken),
         });
 
-        window.location.href = "/interview" + demoSuffix();
+        window.location.href = "/interview" + suffix;
       })
       .catch(() => {
         hideSpinner();
@@ -284,7 +286,15 @@ function initInterview() {
   const prevQaEl = document.getElementById("previous-qa");
   const nextBtn = document.getElementById("next-btn");
   const backBtn = document.getElementById("back-btn");
+  const restartBtn = document.getElementById("restart-btn");
   const answerErrorEl = document.getElementById("answer-error");
+  const interviewRequests = new AbortController();
+
+  function restartInterview() {
+    interviewRequests.abort();
+    clearSession();
+    window.location.replace("/");
+  }
 
   function currentQuestions() {
     return phase === "hpc" ? currentBatchQuestions : biasQuestions;
@@ -386,6 +396,18 @@ function initInterview() {
     });
   }
 
+  function showSubmissionError(error, message, retry) {
+    if (error === "session_expired") {
+      nextBtn.disabled = true;
+      showErrorBanner("This interview session has ended. Use Restart interview to begin again.");
+    } else if (error === "batch_changed") {
+      nextBtn.disabled = true;
+      showErrorBanner("This page is out of sync with your interview. Use Restart interview to start over.");
+    } else {
+      showErrorBanner(message, retry);
+    }
+  }
+
   function fetchNextBatch(answers = [...currentBatchAnswers], urgentToken) {
     hideErrorBanner();
     showSpinner("Thinking about what to ask next…");
@@ -403,9 +425,11 @@ function initInterview() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal: interviewRequests.signal,
     })
       .then((r) => r.json())
       .then((data) => {
+        if (interviewRequests.signal.aborted) return;
         hideSpinner();
         nextBtn.disabled = false;
 
@@ -415,7 +439,7 @@ function initInterview() {
         }
 
         if (data.error) {
-          showErrorBanner("Something went wrong. Please try again.", retry);
+          showSubmissionError(data.error, "The next questions couldn’t be loaded. Your answers are still here. Try again.", retry);
           return;
         }
 
@@ -430,6 +454,7 @@ function initInterview() {
             currentBatchQuestions.map((q, i) => [q, answers[i] || ""])
           );
           batchNumber++;
+          hpcDone = data.final_batch === true;
           currentBatchQuestions = data.questions;
           currentBatchAnswers = [];
           currentIndex = 0;
@@ -438,9 +463,10 @@ function initInterview() {
         }
       })
       .catch(() => {
+        if (interviewRequests.signal.aborted) return;
         hideSpinner();
         nextBtn.disabled = false;
-        showErrorBanner("Something went wrong. Please try again.", retry);
+        showErrorBanner("Couldn’t reach the server. Your answers are still here. Try again.", retry);
       });
   }
 
@@ -454,9 +480,11 @@ function initInterview() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: session.session_id, answers, urgent_token: urgentToken }),
+      signal: interviewRequests.signal,
     })
       .then((r) => r.json())
       .then((data) => {
+        if (interviewRequests.signal.aborted) return;
         hideSpinner();
         nextBtn.disabled = false;
 
@@ -466,7 +494,7 @@ function initInterview() {
         }
 
         if (data.error) {
-          showErrorBanner("Something went wrong processing your answers. Please try again.", retry);
+          showSubmissionError(data.error, "The follow-up questions couldn’t be loaded. Your answers are still here. Try again.", retry);
           return;
         }
 
@@ -484,9 +512,10 @@ function initInterview() {
         renderQuestion(0);
       })
       .catch(() => {
+        if (interviewRequests.signal.aborted) return;
         hideSpinner();
         nextBtn.disabled = false;
-        showErrorBanner("Something went wrong. Please try again.", retry);
+        showErrorBanner("Couldn’t reach the server. Your answers are still here. Try again.", retry);
       });
   }
 
@@ -501,9 +530,11 @@ function initInterview() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal: interviewRequests.signal,
     })
       .then((r) => r.json())
       .then((data) => {
+        if (interviewRequests.signal.aborted) return;
         hideSpinner();
         nextBtn.disabled = false;
 
@@ -512,8 +543,8 @@ function initInterview() {
           return;
         }
 
-        if (data.error && data.error === "session_expired") {
-          showErrorBanner("Your session has expired. " + (data.message || "Please start again."));
+        if (data.error) {
+          showSubmissionError(data.error, "The summary couldn’t be built. Your answers are still here. Try again.", () => submitBias(answers, urgentToken));
           return;
         }
 
@@ -523,6 +554,7 @@ function initInterview() {
         window.location.href = "/results" + demoSuffix();
       })
       .catch(() => {
+        if (interviewRequests.signal.aborted) return;
         hideSpinner();
         nextBtn.disabled = false;
         showErrorBanner("Something went wrong. Please try again.", () => submitBias(answers, urgentToken));
@@ -538,7 +570,53 @@ function initInterview() {
       return;
     }
     answerErrorEl.style.display = "none";
+    checkAnswer(answer);
+  }
 
+  async function checkAnswer(answer, urgentToken) {
+    hideErrorBanner();
+    nextBtn.disabled = true;
+    answerEl.readOnly = true;
+
+    let data;
+    try {
+      const response = await fetch("/check-answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: session.session_id,
+          phase,
+          batch_number: batchNumber,
+          index: currentIndex,
+          answer,
+          urgent_token: urgentToken,
+        }),
+        signal: interviewRequests.signal,
+      });
+      data = await response.json();
+    } catch {
+      if (!interviewRequests.signal.aborted) {
+        showErrorBanner("Couldn’t check this answer. Your answer is still here. Try again.", handleNext);
+      }
+      return;
+    } finally {
+      nextBtn.disabled = false;
+      answerEl.readOnly = false;
+    }
+
+    if (interviewRequests.signal.aborted) return;
+    if (typeof data?.acute !== "boolean") {
+      showSubmissionError(data?.error, "Couldn’t check this answer. Your answer is still here. Try again.", handleNext);
+      return;
+    }
+    if (data.acute) {
+      pauseInterview(data, (token) => checkAnswer(answer, token));
+      return;
+    }
+    advanceWithAnswer(answer);
+  }
+
+  function advanceWithAnswer(answer) {
     const ans = currentAnswers();
     ans[currentIndex] = answer;
 
@@ -579,6 +657,7 @@ function initInterview() {
 
   nextBtn.addEventListener("click", handleNext);
   backBtn.addEventListener("click", handleBack);
+  restartBtn.addEventListener("click", restartInterview);
   answerEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.ctrlKey) handleNext();
   });
@@ -800,6 +879,25 @@ function initResults() {
   }
 
   renderTimeline();
+
+  const transcript = results.interview_transcript || [];
+  if (transcript.length) {
+    const transcriptList = document.getElementById("transcript-list");
+    for (const [question, answer] of transcript) {
+      const item = document.createElement("li");
+      const questionEl = document.createElement("p");
+      questionEl.className = "transcript-question";
+      questionEl.dir = "auto";
+      questionEl.textContent = question;
+      const answerEl = document.createElement("p");
+      answerEl.className = "transcript-answer";
+      answerEl.dir = "auto";
+      answerEl.textContent = answer;
+      item.append(questionEl, answerEl);
+      transcriptList.appendChild(item);
+    }
+    document.getElementById("transcript-section").hidden = false;
+  }
 
   // Copy to clipboard
   const copyBtn = document.getElementById("copy-btn");

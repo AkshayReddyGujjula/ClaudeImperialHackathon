@@ -43,6 +43,13 @@ _HPC_DIMENSIONS = [
     "Context (preceding events, activities, illnesses, life changes)",
 ]
 
+_ACUTE_SAFETY_RULES = """
+Flag a possible current emergency when the patient reports active chest pain, difficulty breathing,
+serious injury such as a recent stabbing, heavy active bleeding, sudden confusion, or symptoms of stroke or heart attack.
+Treat a literal report that the patient is dying as urgent if it could describe their current situation.
+Consider timing across answers. An old, resolved event or a figurative expression does not by itself indicate a current emergency.
+"""
+
 
 def build_adaptive_batch_prompt(
     chief_complaint: str,
@@ -81,6 +88,10 @@ def build_adaptive_batch_prompt(
 
 The patient's chief complaint: "{chief_complaint}"
 {prev_qa_text}
+First assess the complaint and the answers so far for a possible current emergency. Set `acute_symptoms_detected` accordingly.
+{_ACUTE_SAFETY_RULES}
+Include the usual questions even if you flag an emergency. The app will show the warning before any questions.
+
 The HPC (History of Presenting Complaint) dimensions to cover across all batches:
 {dimensions_text}
 
@@ -96,10 +107,9 @@ Additional rules:
 - Each question should be a single, clear question — not a compound question
 
 Return ONLY valid JSON in this exact format, no other text:
-{{"questions": ["question 1", "question 2", "question 3"], "done": false}}
+{{"questions": ["question 1", "question 2", "question 3"], "done": false, "acute_symptoms_detected": false}}
 
-If all key HPC dimensions are already well-covered and no more questions are needed, return:
-{{"questions": [], "done": true}}"""
+Set `acute_symptoms_detected` to true if the safety rules indicate a possible current emergency. If all key HPC dimensions are already well-covered, return an empty `questions` array and set `done` to true."""
 
 
 def build_call2_prompt(chief_complaint: str, hpc_qa: list, bias_library: list) -> str:
@@ -140,13 +150,13 @@ CRITICAL DISTINCTION:
 - "I have chest pain right now" → ACUTE (current and active)
 - "I had chest pain last month that resolved" → NOT ACUTE (historical)
 
-Only output acute_symptoms_detected: true if a symptom is BOTH currently active AND falls into an emergency category (chest pain, breathing difficulty, severe head trauma, sudden confusion, heavy active bleeding, symptoms of stroke or heart attack).
+{_ACUTE_SAFETY_RULES}
 
 Return ONLY valid JSON, no other text:
 {{"acute_symptoms_detected": false, "red_flag_category": null}}
 
 Or if acute:
-{{"acute_symptoms_detected": true, "red_flag_category": "chest_pain_999 | breathing_999 | head_trauma_999 | confusion_999 | bleeding_999"}}"""
+{{"acute_symptoms_detected": true, "red_flag_category": "chest_pain_999 | breathing_999 | serious_injury_999 | confusion_999 | bleeding_999 | other_999"}}"""
 
 
 def build_call4_prompt(

@@ -10,6 +10,7 @@ from threading import Lock
 from flask import Flask, jsonify, render_template, request
 from dotenv import load_dotenv
 import anthropic
+from anthropic.types import OutputConfigParam
 from itsdangerous import BadData, URLSafeTimedSerializer
 
 from safety_checks import keyword_acute_check, parse_safety_response
@@ -21,7 +22,7 @@ from prompt_templates import (
     build_call4_prompt,
 )
 from timeline_parser import validate_and_sort_timeline
-from export_formatter import build_export_context
+from export_formatter import build_export_context, build_interview_transcript
 
 load_dotenv()
 
@@ -33,6 +34,23 @@ SESSION_TTL_MINUTES = 90
 sessions: dict = {}
 urgent_tokens = URLSafeTimedSerializer(os.urandom(32), salt="medi-scribe-urgent-warning")
 batch_commit_lock = Lock()
+
+BATCH_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "questions": {"type": "array", "items": {"type": "string"}},
+        "done": {"type": "boolean"},
+        "acute_symptoms_detected": {"type": "boolean"},
+    },
+    "required": ["questions", "done", "acute_symptoms_detected"],
+    "additionalProperties": False,
+}
+BIAS_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {"bias_questions": {"type": "array", "items": {"type": "string"}}},
+    "required": ["bias_questions"],
+    "additionalProperties": False,
+}
 
 # Load demo fixture once at startup
 _demo_fixture = None
@@ -77,6 +95,22 @@ def require_urgent_acknowledgement(data: dict, *scope):
     return jsonify({"acute": True, "continuation_token": urgent_tokens.dumps(fingerprint)})
 
 
+def current_question_batch_number(session: dict) -> int:
+    previous = session.get("last_batch_submission")
+    if previous and previous["response"]["done"]:
+        return previous["batch"]
+    return session["batch_number"]
+
+
+def has_unacknowledged_acute_answers(session: dict, phase: str, answers: list) -> bool:
+    acknowledged = session.get("acknowledged_urgent_answers", {})
+    batch_number = current_question_batch_number(session)
+    return any(
+        keyword_acute_check(str(answer)) and acknowledged.get((phase, batch_number, index)) != answer
+        for index, answer in enumerate(answers)
+    )
+
+
 def repeat_or_reject_batch(session: dict, batch_number: int, answers: list):
     previous = session.get("last_batch_submission")
     if previous and previous["batch"] == batch_number and previous["answers"] == answers:
@@ -88,15 +122,22 @@ def repeat_or_reject_batch(session: dict, batch_number: int, answers: list):
 # Claude helper
 # ---------------------------------------------------------------------------
 
-def call_claude(prompt: str, max_tokens: int) -> str | None:
+def call_claude(prompt: str, max_tokens: int, *, schema: dict | None = None) -> str | None:
+    output_config: OutputConfigParam = {"effort": "medium"}
+    if schema is not None:
+        output_config["format"] = {"type": "json_schema", "schema": schema}
+
     try:
         response = client.messages.create(
             model="claude-haiku-5-5",
             max_tokens=max_tokens,
-            output_config={"effort": "low"},
-            thinking={"type": "disabled"},
+            output_config=output_config,
+            thinking={"type": "adaptive"},
             messages=[{"role": "user", "content": prompt}],
         )
+        if schema is not None and response.stop_reason in {"max_tokens", "refusal"}:
+            app.logger.warning("Claude question generation stopped: %s", response.stop_reason)
+            return None
         return "".join(
             block.text
             for block in response.content
@@ -116,6 +157,33 @@ def _strip_fences(raw: str) -> str:
             content = content[4:]
         return content.strip()
     return cleaned
+
+
+def parse_question_response(raw: str | None, field: str) -> dict | None:
+    if raw:
+        try:
+            result = json.loads(_strip_fences(raw))
+        except ValueError:
+            result = None
+        if isinstance(result, dict):
+            questions = result.get(field)
+            if isinstance(questions, list) and all(isinstance(q, str) and q.strip() for q in questions):
+                return result
+
+    app.logger.warning("Claude did not return a usable %s response", field)
+    return None
+
+
+def generate_question_batch(chief_complaint: str, history: list, batch_number: int) -> dict | None:
+    raw = call_claude(
+        build_adaptive_batch_prompt(chief_complaint, history, batch_number),
+        max_tokens=4096,
+        schema=BATCH_RESPONSE_SCHEMA,
+    )
+    batch = parse_question_response(raw, "questions")
+    if batch is None or not all(isinstance(batch.get(field), bool) for field in ("done", "acute_symptoms_detected")):
+        return None
+    return batch
 
 
 # ---------------------------------------------------------------------------
@@ -162,29 +230,28 @@ def start():
         return jsonify({"error": "missing_complaint"}), 400
 
     demo = is_demo_request()
+    urgent_scope = ("start", demo, chief_complaint)
 
     if keyword_acute_check(chief_complaint):
-        warning = require_urgent_acknowledgement(data, "start", demo, chief_complaint)
+        warning = require_urgent_acknowledgement(data, *urgent_scope)
         if warning is not None:
             return warning
 
     cleanup_sessions()
 
     if demo:
-        fixture = _load_demo_fixture()
-        questions = fixture["batch1_response"]["questions"]
-        batch_done = fixture["batch1_response"].get("done", False)
+        batch = _load_demo_fixture()["batch1_response"]
     else:
-        raw = call_claude(build_adaptive_batch_prompt(chief_complaint, [], 1), max_tokens=400)
-        if not raw:
-            return jsonify({"error": "interview_failed"}), 500
-        try:
-            parsed = json.loads(_strip_fences(raw))
-            questions = parsed["questions"]
-            batch_done = parsed.get("done", False)
-        except Exception:
-            return jsonify({"error": "interview_failed"}), 500
+        batch = generate_question_batch(chief_complaint, [], 1)
+    if batch and batch.get("acute_symptoms_detected"):
+        warning = require_urgent_acknowledgement(data, *urgent_scope)
+        if warning is not None:
+            return warning
+    if not batch or not batch["questions"]:
+        return jsonify({"error": "interview_failed"}), 502
 
+    questions = batch["questions"]
+    batch_done = batch.get("done", False)
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
         "complaint": chief_complaint,
@@ -201,6 +268,36 @@ def start():
     }
 
     return jsonify({"session_id": session_id, "questions": questions, "done": batch_done})
+
+
+# Check individual answers before showing another question from the current batch.
+@app.route("/check-answer", methods=["POST"])
+def check_answer():
+    data = request.get_json(force=True)
+    session_id = data.get("session_id")
+    session = sessions.get(session_id)
+    if not session:
+        return session_expired_response()
+
+    phase, index, answer = data.get("phase"), data.get("index"), data.get("answer")
+    if phase not in ("hpc", "bias") or type(index) is not int or not isinstance(answer, str):
+        return jsonify({"error": "invalid_answer"}), 400
+    batch_number = current_question_batch_number(session)
+    if phase == "hpc" and data.get("batch_number") != batch_number:
+        return jsonify({"error": "batch_changed"}), 409
+    questions = session["current_batch_questions"] if phase == "hpc" else session["bias_questions"]
+    if not 0 <= index < len(questions):
+        return jsonify({"error": "invalid_answer"}), 400
+
+    if keyword_acute_check(answer):
+        acknowledged = session.setdefault("acknowledged_urgent_answers", {})
+        key = (phase, batch_number, index)
+        if acknowledged.get(key) != answer:
+            warning = require_urgent_acknowledgement(data, "answer", session_id, *key, answer)
+            if warning is not None:
+                return warning
+            acknowledged[key] = answer
+    return jsonify({"acute": False})
 
 
 # ---------------------------------------------------------------------------
@@ -222,8 +319,9 @@ def next_batch():
     if submitted_batch != current_batch:
         return repeat_or_reject_batch(session, submitted_batch, answers)
 
-    if keyword_acute_check(" ".join(str(a) for a in answers)):
-        warning = require_urgent_acknowledgement(data, "next-batch", session_id, current_batch, answers)
+    urgent_scope = ("next-batch", session_id, current_batch, answers)
+    if has_unacknowledged_acute_answers(session, "hpc", answers):
+        warning = require_urgent_acknowledgement(data, *urgent_scope)
         if warning is not None:
             return warning
 
@@ -236,25 +334,22 @@ def next_batch():
     if next_batch_number <= 3:
         if session_is_demo(session):
             batch_data = _load_demo_fixture().get(f"batch{next_batch_number}_response")
-            if batch_data:
-                questions = batch_data["questions"]
-                batch_done = batch_data.get("done", False)
         else:
-            raw = call_claude(
-                build_adaptive_batch_prompt(session["complaint"], hpc_qa, next_batch_number),
-                max_tokens=400,
-            )
-            if not raw:
-                return jsonify({"error": "batch_failed"}), 500
-            try:
-                parsed = json.loads(_strip_fences(raw))
-                questions = parsed["questions"]
-                batch_done = parsed.get("done", False)
-            except Exception:
-                return jsonify({"error": "batch_failed"}), 500
+            batch_data = generate_question_batch(session["complaint"], hpc_qa, next_batch_number)
+            if batch_data and batch_data.get("acute_symptoms_detected"):
+                warning = require_urgent_acknowledgement(data, *urgent_scope)
+                if warning is not None:
+                    return warning
+            if batch_data is None or (not batch_data["questions"] and not batch_data["done"]):
+                return jsonify({"error": "batch_failed"}), 502
+        if batch_data:
+            questions = batch_data["questions"]
+            batch_done = batch_data.get("done", False)
 
-    done = batch_done or not questions
+    done = not questions
     result = {"done": True} if done else {"questions": questions, "done": False}
+    if questions and batch_done:
+        result["final_batch"] = True
     batch_submission = {"batch": current_batch, "answers": answers, "response": result}
     updates = {"batch_number": next_batch_number, "last_batch_submission": batch_submission}
     if done:
@@ -290,7 +385,7 @@ def submit_hpc():
     hpc_qa = session["all_qa"] + final_qa
     urgent_scope = ("submit-hpc", session_id, hpc_qa)
 
-    if final_qa != saved_final_qa and keyword_acute_check(" ".join(str(a) for _, a in final_qa)):
+    if final_qa != saved_final_qa and has_unacknowledged_acute_answers(session, "hpc", final_answers):
         warning = require_urgent_acknowledgement(data, *urgent_scope)
         if warning is not None:
             return warning
@@ -307,20 +402,19 @@ def submit_hpc():
             future_bias = executor.submit(
                 call_claude,
                 build_call2_prompt(session["complaint"], hpc_qa, BIAS_REDUCTION_LIBRARY),
-                400,
+                4096,
+                schema=BIAS_RESPONSE_SCHEMA,
             )
             future_safety = executor.submit(
                 call_claude,
                 build_call3_prompt(session["complaint"], hpc_qa),
-                150,
+                4096,
             )
             raw_bias = future_bias.result(timeout=30)
             safety_raw = future_safety.result(timeout=30)
 
-        try:
-            bias_questions = json.loads(_strip_fences(raw_bias))["bias_questions"] if raw_bias else None
-        except (TypeError, ValueError, KeyError):
-            bias_questions = None
+        bias_result = parse_question_response(raw_bias, "bias_questions")
+        bias_questions = bias_result["bias_questions"] if bias_result else None
 
     safety_result = parse_safety_response(safety_raw)
     if safety_result is None:
@@ -331,7 +425,7 @@ def submit_hpc():
             return warning
 
     if not isinstance(bias_questions, list) or not bias_questions:
-        return jsonify({"error": "processing_failed"}), 500
+        return jsonify({"error": "processing_failed"}), 502
 
     session.update(
         final_hpc_qa=final_qa,
@@ -357,12 +451,13 @@ def submit_bias():
     if not session:
         return session_expired_response()
 
-    if keyword_acute_check(" ".join(str(a) for a in bias_answers)):
+    if has_unacknowledged_acute_answers(session, "bias", bias_answers):
         warning = require_urgent_acknowledgement(data, "submit-bias", session_id, bias_answers)
         if warning is not None:
             return warning
 
     session["bias_answers"] = bias_answers
+    transcript = build_interview_transcript(session)
 
     today_date = date.today().strftime("%d %B %Y")
 
@@ -374,13 +469,13 @@ def submit_bias():
             bias_answers,
             today_date=today_date,
         ),
-        max_tokens=1600,
+        max_tokens=6144,
     )
 
     if raw:
         parsed = validate_and_sort_timeline(raw)
         if not parsed.get("_parse_error"):
-            results = {**parsed, "partial": False}
+            results = {**parsed, "partial": False, "interview_transcript": transcript}
             session["final_results"] = results
             return jsonify(results)
 
@@ -394,6 +489,7 @@ def submit_bias():
         "patient_quote": session.get("complaint", ""),
         "completeness": None,
         "partial": True,
+        "interview_transcript": transcript,
         "message": "We couldn't process your additional answers fully. Here's what we have — you can still export this summary.",
     }
     session["final_results"] = fallback

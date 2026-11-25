@@ -14,6 +14,12 @@ ACUTE_KEYWORDS = [
     "seizure",
     "unconscious",
     "bleeding heavily",
+    "got stabbed",
+    "been stabbed",
+    "was stabbed",
+    "stab wound",
+    "i am dying",
+    "i'm dying",
     "sudden severe headache",
     "can't speak",
     "cannot speak",
@@ -33,7 +39,7 @@ CRISIS_BANNER_TEXT = (
 
 def keyword_acute_check(text: str) -> bool:
     """Layer 1: deterministic keyword pre-check. Returns True if any acute keyword found."""
-    lowered = text.lower()
+    lowered = " ".join(text.lower().replace("’", "'").split())
     return any(keyword in lowered for keyword in ACUTE_KEYWORDS)
 
 

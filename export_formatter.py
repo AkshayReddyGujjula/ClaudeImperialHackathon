@@ -1,9 +1,22 @@
 from datetime import date
 
+INTAKE_QUESTION = "What brought you here today?"
+
+
+def build_interview_transcript(session: dict) -> list[tuple[str, str]]:
+    """Return the original interview questions and submitted answers in order."""
+    transcript = []
+    if complaint := session.get("complaint"):
+        transcript.append((INTAKE_QUESTION, complaint))
+    transcript.extend(session.get("all_qa", []))
+    transcript.extend(session.get("final_hpc_qa", []))
+    transcript.extend(zip(session.get("bias_questions", []), session.get("bias_answers", [])))
+    return transcript
+
 
 def build_export_context(session: dict) -> dict:
     """Build template context for export_template.html from session data."""
-    results = session.get("final_results", {})
+    results = session.get("final_results") or {}
     timeline = results.get("timeline_entries", [])
     background = results.get("background", {}) or {}
 
@@ -32,4 +45,5 @@ def build_export_context(session: dict) -> dict:
         "patient_quote": results.get("patient_quote", session.get("complaint", "")),
         "partial": results.get("partial", False),
         "completeness": completeness,
+        "interview_transcript": results.get("interview_transcript") or build_interview_transcript(session),
     }

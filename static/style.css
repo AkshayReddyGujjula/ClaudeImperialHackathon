@@ -217,9 +217,12 @@ textarea:focus {
 
 .btn-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-top: 0.5rem;
 }
+
+.btn-restart { margin-inline-start: auto; }
 
 /* ---- Spinner ---- */
 .spinner {
@@ -380,6 +383,11 @@ textarea:focus {
 
 .summary-section:first-of-type { border-top: none; }
 
+.transcript-list { padding-inline-start: 1.5rem; }
+.transcript-list li { margin-bottom: 0.75rem; overflow-wrap: anywhere; }
+.transcript-question { font-weight: 600; }
+.transcript-answer { margin-top: 0.15rem; white-space: pre-wrap; }
+
 .chief-complaint-text {
   font-size: 1rem;
   margin-bottom: 0.5rem;
@@ -507,10 +515,6 @@ textarea:focus {
   border-top: 1px solid var(--border);
   padding-top: 0.75rem;
 }
-
-/* ---- Demo link ---- */
-.demo-link { margin-top: 2rem; font-size: 0.8rem; color: var(--grey); text-align: center; }
-.demo-link a { color: var(--grey); }
 
 /* ---- Export page ---- */
 .export-page { max-width: 720px; margin: 0 auto; padding: 2rem; font-size: 0.9rem; }

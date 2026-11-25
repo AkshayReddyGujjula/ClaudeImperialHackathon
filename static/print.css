@@ -8,7 +8,6 @@
   .no-print,
   .print-btn-row,
   nav,
-  .demo-link,
   .btn-edit,
   .btn-export,
   .btn-secondary,
@@ -67,12 +66,9 @@
     text-decoration: none;
   }
 
-  /* Export footer pinned to bottom */
+  /* Keep the footer after the transcript, clear of page content. */
   .export-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    break-inside: avoid;
     text-align: center;
     font-size: 8pt;
     color: #666;
@@ -84,6 +80,10 @@
   .summary-section {
     page-break-inside: avoid;
   }
+
+  .transcript-section { break-inside: auto; }
+  .transcript-section h2, .transcript-question { break-after: avoid; }
+  .transcript-list li { break-inside: avoid; }
 
   /* Lists */
   ul, ol { padding-left: 14pt; }
