@@ -266,14 +266,18 @@ function initInterview() {
 
   // ---- State ----
   let currentBatchQuestions = session.currentBatchQuestions;  // questions in this batch
-  let currentBatchAnswers = [];                               // answers for this batch
+  let currentBatchAnswers = session.currentBatchAnswers || [];
   let allQaPairs = session.allQaPairs || [];                  // all completed Q&A across batches
   let batchNumber = session.batchNumber || 1;
   let hpcDone = session.hpcDone || false;
 
-  let phase = "hpc"; // "hpc" or "bias"
-  let biasQuestions = [];
-  let biasAnswers = [];
+  let phase = session.phase || "hpc";
+  let biasQuestions = session.biasQuestions || [];
+  let biasAnswers = session.biasAnswers || [];
+  let coverageQuestions = session.coverageQuestions || [];
+  let coverageAnswers = [];
+  let coveragePairs = session.coveragePairs || [];
+  let coverageRound = session.coverageRound || 0;
   let currentIndex = 0;
 
   const TOTAL_BATCHES = 3;
@@ -297,10 +301,12 @@ function initInterview() {
   }
 
   function currentQuestions() {
+    if (phase === "coverage") return coverageQuestions;
     return phase === "hpc" ? currentBatchQuestions : biasQuestions;
   }
 
   function currentAnswers() {
+    if (phase === "coverage") return coverageAnswers;
     return phase === "hpc" ? currentBatchAnswers : biasAnswers;
   }
 
@@ -311,6 +317,7 @@ function initInterview() {
     answerEl.focus();
 
     if (phase === "hpc") {
+      phaseLabelEl.textContent = "Your symptom history";
       // Show batch-aware progress: "Part 1 of 3 — Question 2 of 3"
       const batchTotal = qs.length;
       progressEl.textContent = `Part ${batchNumber} of ${TOTAL_BATCHES} — Question ${idx + 1} of ${batchTotal}`;
@@ -322,7 +329,9 @@ function initInterview() {
       progressBar.style.width = pct + "%";
     } else {
       const total = qs.length;
-      progressEl.textContent = `Additional question ${idx + 1} of ${total}`;
+      const clarifying = phase === "coverage";
+      phaseLabelEl.textContent = clarifying ? "A few details to clarify" : "A few more questions about your history";
+      progressEl.textContent = `${clarifying ? "Clarifying" : "Additional"} question ${idx + 1} of ${total}`;
       const pct = Math.round(((idx + 1) / total) * 100);
       progressBar.style.width = pct + "%";
     }
@@ -332,55 +341,48 @@ function initInterview() {
 
     // Next button label
     const isLastInPhase = idx === currentQuestions().length - 1;
-    if (phase === "hpc") {
-      nextBtn.textContent = isLastInPhase ? "Submit answers →" : "Next →";
-    } else {
-      nextBtn.textContent = isLastInPhase ? "Build my timeline →" : "Next →";
-    }
+    nextBtn.textContent = isLastInPhase ? "Submit answers →" : "Next →";
     answerErrorEl.style.display = "none";
 
     // Render previous Q&A accordion — all completed pairs + current batch prior answers
     prevQaEl.innerHTML = "";
 
     const previousPairs = [...allQaPairs];
-    if (phase === "bias") {
+    if (phase !== "hpc") {
       previousPairs.push(...currentBatchQuestions.map((q, i) => [q, currentBatchAnswers[i]]));
     }
+    if (phase === "coverage") {
+      previousPairs.push(...biasQuestions.map((q, i) => [q, biasAnswers[i]]), ...coveragePairs);
+    }
+    const answers = currentAnswers();
+    previousPairs.push(...qs.slice(0, idx).map((question, i) => [question, answers[i]]));
     previousPairs.forEach(([q, a]) => {
       if (!a) return;
       const item = document.createElement("details");
       item.className = "prev-qa-item";
-      item.innerHTML = `<summary>${q}</summary><p>${a}</p>`;
+      const question = document.createElement("summary");
+      const answer = document.createElement("p");
+      question.textContent = q;
+      answer.textContent = a;
+      item.append(question, answer);
       prevQaEl.appendChild(item);
     });
-
-    // Current batch answers so far
-    if (phase === "hpc") {
-      currentBatchAnswers.slice(0, idx).forEach((ans, i) => {
-        if (!ans) return;
-        const item = document.createElement("details");
-        item.className = "prev-qa-item";
-        item.innerHTML = `<summary>${currentBatchQuestions[i]}</summary><p>${ans}</p>`;
-        prevQaEl.appendChild(item);
-      });
-    } else {
-      biasAnswers.slice(0, idx).forEach((ans, i) => {
-        if (!ans) return;
-        const item = document.createElement("details");
-        item.className = "prev-qa-item";
-        item.innerHTML = `<summary>${biasQuestions[i]}</summary><p>${ans}</p>`;
-        prevQaEl.appendChild(item);
-      });
-    }
   }
 
   function saveSessionState() {
     setSession({
       session_id: session.session_id,
       currentBatchQuestions,
+      currentBatchAnswers,
       allQaPairs,
       batchNumber,
       hpcDone,
+      phase,
+      biasQuestions,
+      biasAnswers,
+      coverageQuestions,
+      coveragePairs,
+      coverageRound,
       demo: session.demo,
       urgentWarning: session.urgentWarning,
     });
@@ -503,11 +505,7 @@ function initInterview() {
         phase = "bias";
         currentIndex = 0;
         biasAnswers.length = 0;
-
-        if (phaseLabelEl) {
-          phaseLabelEl.textContent = "A few more questions to make sure we haven't missed anything:";
-        }
-
+        saveSessionState();
         progressBar.style.width = "100%";
         renderQuestion(0);
       })
@@ -519,12 +517,19 @@ function initInterview() {
       });
   }
 
-  function submitBias(answers = [...biasAnswers], urgentToken) {
+  function submitBias(answers = [...currentAnswers()], urgentToken) {
     hideErrorBanner();
-    showSpinner("Building your timeline…");
+    showSpinner("Checking for any missing details…");
     nextBtn.disabled = true;
 
-    const payload = { session_id: session.session_id, bias_answers: answers, urgent_token: urgentToken };
+    const clarifying = phase === "coverage";
+    const payload = { session_id: session.session_id, urgent_token: urgentToken };
+    if (clarifying) {
+      payload.coverage_round = coverageRound;
+      payload.coverage_answers = answers;
+    } else {
+      payload.bias_answers = answers;
+    }
 
     fetch("/submit-bias" + demoSuffix(), {
       method: "POST",
@@ -544,7 +549,19 @@ function initInterview() {
         }
 
         if (data.error) {
-          showSubmissionError(data.error, "The summary couldn’t be built. Your answers are still here. Try again.", () => submitBias(answers, urgentToken));
+          showSubmissionError(data.error, "Couldn’t finish reviewing your answers. Your answers are still here. Try again.", () => submitBias(answers, urgentToken));
+          return;
+        }
+
+        if (Array.isArray(data.coverage_questions) && data.coverage_questions.length && Number.isInteger(data.coverage_round)) {
+          if (clarifying) coveragePairs.push(...coverageQuestions.map((question, i) => [question, answers[i]]));
+          coverageRound = data.coverage_round;
+          coverageQuestions = data.coverage_questions;
+          coverageAnswers = [];
+          phase = "coverage";
+          currentIndex = 0;
+          saveSessionState();
+          renderQuestion(0);
           return;
         }
 
@@ -565,7 +582,7 @@ function initInterview() {
     if (nextBtn.disabled) return;
 
     const answer = answerEl.value.trim();
-    if (answer.length < 3) {
+    if (!answer) {
       answerErrorEl.style.display = "block";
       return;
     }
@@ -586,7 +603,7 @@ function initInterview() {
         body: JSON.stringify({
           session_id: session.session_id,
           phase,
-          batch_number: batchNumber,
+          batch_number: phase === "coverage" ? coverageRound : batchNumber,
           index: currentIndex,
           answer,
           urgent_token: urgentToken,
@@ -649,7 +666,6 @@ function initInterview() {
       // Go back to last HPC question in the last batch
       phase = "hpc";
       currentIndex = currentBatchQuestions.length - 1;
-      if (phaseLabelEl) phaseLabelEl.textContent = "Your symptom history";
       renderQuestion(currentIndex);
     }
     // At the start of a non-first HPC batch, back is disabled — we don't re-fetch previous batches
@@ -770,31 +786,6 @@ function initResults() {
       bgList.appendChild(li);
     });
     if (hasBg) bgSection.style.display = "block";
-  }
-
-  // Completeness score
-  const completeness = results.completeness;
-  const completenessSection = document.getElementById("completeness-section");
-  if (completeness && completenessSection) {
-    completenessSection.style.display = "block";
-    const scoreEl = document.getElementById("completeness-score-fill");
-    const scoreText = document.getElementById("completeness-score-text");
-    const missingList = document.getElementById("completeness-missing-list");
-
-    if (scoreEl) scoreEl.style.width = (completeness.score * 10) + "%";
-    if (scoreText) scoreText.textContent = `${completeness.score}/10`;
-
-    if (missingList && completeness.missing_dimensions && completeness.missing_dimensions.length > 0) {
-      completeness.missing_dimensions.forEach((dim) => {
-        const li = document.createElement("li");
-        li.textContent = dim;
-        missingList.appendChild(li);
-      });
-    } else if (missingList) {
-      const li = document.createElement("li");
-      li.textContent = "All key areas appear well-covered.";
-      missingList.appendChild(li);
-    }
   }
 
   // Timeline render

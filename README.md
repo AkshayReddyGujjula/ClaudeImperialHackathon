@@ -37,7 +37,6 @@ The full history is compiled into a structured JSON document containing:
 - Chief complaint summary
 - Modifying factors and associated symptoms
 - Background context (family history, medications, travel, etc.)
-- Information completeness score
 
 Results can be exported as a formatted HTML summary.
 

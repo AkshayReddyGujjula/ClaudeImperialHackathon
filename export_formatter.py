@@ -11,6 +11,7 @@ def build_interview_transcript(session: dict) -> list[tuple[str, str]]:
     transcript.extend(session.get("all_qa", []))
     transcript.extend(session.get("final_hpc_qa", []))
     transcript.extend(zip(session.get("bias_questions", []), session.get("bias_answers", [])))
+    transcript.extend(session.get("coverage_qa", []))
     return transcript
 
 
@@ -32,8 +33,6 @@ def build_export_context(session: dict) -> dict:
         background_items["Weight changes"] = background["weight_changes"]
     other = background.get("other") or []
 
-    completeness = results.get("completeness")
-
     return {
         "generated_date": date.today().strftime("%d %B %Y"),
         "chief_complaint_sentence": results.get("chief_complaint_sentence", session.get("complaint", "")),
@@ -44,6 +43,5 @@ def build_export_context(session: dict) -> dict:
         "background_other": other,
         "patient_quote": results.get("patient_quote", session.get("complaint", "")),
         "partial": results.get("partial", False),
-        "completeness": completeness,
         "interview_transcript": results.get("interview_transcript") or build_interview_transcript(session),
     }

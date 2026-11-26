@@ -94,18 +94,6 @@
     </section>
     {% endif %}
 
-    {% if completeness and completeness.missing_dimensions %}
-    <section class="export-section">
-      <h2>Topics Not Yet Covered</h2>
-      <p class="export-missing-note">The patient may wish to discuss the following areas with their doctor:</p>
-      <ul>
-        {% for dim in completeness.missing_dimensions %}
-        <li>{{ dim }}</li>
-        {% endfor %}
-      </ul>
-    </section>
-    {% endif %}
-
     {% if interview_transcript %}
     <section class="export-section transcript-section">
       <h2>Interview transcript</h2>

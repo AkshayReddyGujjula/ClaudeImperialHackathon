@@ -13,6 +13,12 @@ import anthropic
 from anthropic.types import OutputConfigParam
 from itsdangerous import BadData, URLSafeTimedSerializer
 
+from history_coverage import (
+    COVERAGE_RESPONSE_SCHEMA,
+    COVERAGE_TARGET,
+    MAX_CLARIFICATION_BATCHES,
+    assess_coverage,
+)
 from safety_checks import keyword_acute_check, parse_safety_response
 from prompt_templates import (
     BIAS_REDUCTION_LIBRARY,
@@ -35,16 +41,6 @@ sessions: dict = {}
 urgent_tokens = URLSafeTimedSerializer(os.urandom(32), salt="medi-scribe-urgent-warning")
 batch_commit_lock = Lock()
 
-BATCH_RESPONSE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "questions": {"type": "array", "items": {"type": "string"}},
-        "done": {"type": "boolean"},
-        "acute_symptoms_detected": {"type": "boolean"},
-    },
-    "required": ["questions", "done", "acute_symptoms_detected"],
-    "additionalProperties": False,
-}
 BIAS_RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {"bias_questions": {"type": "array", "items": {"type": "string"}}},
@@ -102,9 +98,15 @@ def current_question_batch_number(session: dict) -> int:
     return session["batch_number"]
 
 
+def answer_batch_number(session: dict, phase: str) -> int:
+    if phase == "coverage":
+        return session.get("coverage_round", 0)
+    return current_question_batch_number(session)
+
+
 def has_unacknowledged_acute_answers(session: dict, phase: str, answers: list) -> bool:
     acknowledged = session.get("acknowledged_urgent_answers", {})
-    batch_number = current_question_batch_number(session)
+    batch_number = answer_batch_number(session, phase)
     return any(
         keyword_acute_check(str(answer)) and acknowledged.get((phase, batch_number, index)) != answer
         for index, answer in enumerate(answers)
@@ -174,16 +176,20 @@ def parse_question_response(raw: str | None, field: str) -> dict | None:
     return None
 
 
-def generate_question_batch(chief_complaint: str, history: list, batch_number: int) -> dict | None:
+def generate_question_batch(chief_complaint: str, history: list, batch_number: int | None, planned_checks=None) -> dict | None:
     raw = call_claude(
-        build_adaptive_batch_prompt(chief_complaint, history, batch_number),
-        max_tokens=4096,
-        schema=BATCH_RESPONSE_SCHEMA,
+        build_adaptive_batch_prompt(chief_complaint, history, batch_number, planned_checks),
+        max_tokens=6144,
+        schema=COVERAGE_RESPONSE_SCHEMA,
     )
     batch = parse_question_response(raw, "questions")
-    if batch is None or not all(isinstance(batch.get(field), bool) for field in ("done", "acute_symptoms_detected")):
+    if batch is None or not isinstance(batch.get("acute_symptoms_detected"), bool):
         return None
-    return batch
+    coverage = assess_coverage(batch, chief_complaint, history, planned_checks)
+    if coverage is None:
+        return None
+    questions = coverage["questions"][:4 if batch_number is None else 3]
+    return {**coverage, "questions": questions, "done": not questions, "acute_symptoms_detected": batch["acute_symptoms_detected"]}
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +261,7 @@ def start():
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
         "complaint": chief_complaint,
+        "planned_checks": batch.get("planned_checks", {}),
         "current_batch_questions": questions,
         "all_qa": [],
         "batch_number": 1,
@@ -280,12 +287,13 @@ def check_answer():
         return session_expired_response()
 
     phase, index, answer = data.get("phase"), data.get("index"), data.get("answer")
-    if phase not in ("hpc", "bias") or type(index) is not int or not isinstance(answer, str):
+    question_fields = {"hpc": "current_batch_questions", "bias": "bias_questions", "coverage": "coverage_questions"}
+    if not isinstance(phase, str) or phase not in question_fields or type(index) is not int or not isinstance(answer, str):
         return jsonify({"error": "invalid_answer"}), 400
-    batch_number = current_question_batch_number(session)
-    if phase == "hpc" and data.get("batch_number") != batch_number:
+    batch_number = answer_batch_number(session, phase)
+    if phase != "bias" and data.get("batch_number") != batch_number:
         return jsonify({"error": "batch_changed"}), 409
-    questions = session["current_batch_questions"] if phase == "hpc" else session["bias_questions"]
+    questions = session.get(question_fields[phase], [])
     if not 0 <= index < len(questions):
         return jsonify({"error": "invalid_answer"}), 400
 
@@ -330,12 +338,13 @@ def next_batch():
     next_batch_number = current_batch + 1
     questions = []
     batch_done = True
+    batch_data = None
 
     if next_batch_number <= 3:
         if session_is_demo(session):
             batch_data = _load_demo_fixture().get(f"batch{next_batch_number}_response")
         else:
-            batch_data = generate_question_batch(session["complaint"], hpc_qa, next_batch_number)
+            batch_data = generate_question_batch(session["complaint"], hpc_qa, next_batch_number, session.get("planned_checks"))
             if batch_data and batch_data.get("acute_symptoms_detected"):
                 warning = require_urgent_acknowledgement(data, *urgent_scope)
                 if warning is not None:
@@ -352,6 +361,8 @@ def next_batch():
         result["final_batch"] = True
     batch_submission = {"batch": current_batch, "answers": answers, "response": result}
     updates = {"batch_number": next_batch_number, "last_batch_submission": batch_submission}
+    if batch_data and "planned_checks" in batch_data:
+        updates["planned_checks"] = batch_data["planned_checks"]
     if done:
         updates.update(hpc_complete=True, final_hpc_qa=pairs)
     else:
@@ -377,6 +388,8 @@ def submit_hpc():
     session = sessions.get(session_id)
     if not session:
         return session_expired_response()
+    if session.get("completion_submission"):
+        return jsonify({"error": "batch_changed"}), 409
 
     saved_final_qa = session.get("final_hpc_qa", [])
     final_qa = saved_final_qa
@@ -427,12 +440,15 @@ def submit_hpc():
     if not isinstance(bias_questions, list) or not bias_questions:
         return jsonify({"error": "processing_failed"}), 502
 
-    session.update(
-        final_hpc_qa=final_qa,
-        call3_safety_cache=safety_result,
-        bias_questions=bias_questions,
-        hpc_complete=True,
-    )
+    with session.setdefault("completion_lock", Lock()):
+        if session.get("completion_submission"):
+            return jsonify({"error": "batch_changed"}), 409
+        session.update(
+            final_hpc_qa=final_qa,
+            call3_safety_cache=safety_result,
+            bias_questions=bias_questions,
+            hpc_complete=True,
+        )
 
     return jsonify({"bias_questions": bias_questions, "acute": False})
 
@@ -445,55 +461,90 @@ def submit_hpc():
 def submit_bias():
     data = request.get_json(force=True)
     session_id = data.get("session_id")
-    bias_answers = data.get("bias_answers", [])
 
     session = sessions.get(session_id)
     if not session:
         return session_expired_response()
 
-    if has_unacknowledged_acute_answers(session, "bias", bias_answers):
-        warning = require_urgent_acknowledgement(data, "submit-bias", session_id, bias_answers)
-        if warning is not None:
-            return warning
+    round_number = data.get("coverage_round", 0)
+    if type(round_number) is not int or not 0 <= round_number <= MAX_CLARIFICATION_BATCHES:
+        return jsonify({"error": "invalid_answer"}), 400
+    phase = "coverage" if round_number else "bias"
+    answers = data.get("coverage_answers" if round_number else "bias_answers", [])
+    if not isinstance(answers, list) or not all(isinstance(answer, str) and answer.strip() for answer in answers):
+        return jsonify({"error": "invalid_answer"}), 400
 
-    session["bias_answers"] = bias_answers
-    transcript = build_interview_transcript(session)
+    with session.setdefault("completion_lock", Lock()):
+        previous = session.get("completion_submission")
+        if previous and (previous["round"], previous["answers"]) == (round_number, answers):
+            return jsonify(previous["response"])
+        if round_number != session.get("coverage_round", 0) or session.get("final_results"):
+            return jsonify({"error": "batch_changed"}), 409
 
-    today_date = date.today().strftime("%d %B %Y")
+        questions = session.get("coverage_questions" if round_number else "bias_questions", [])
+        if not questions or len(answers) != len(questions):
+            return jsonify({"error": "invalid_answer"}), 400
 
-    # Call 4 is ALWAYS live — even in demo mode
+        urgent_scope = ("submit-bias", session_id, round_number, answers)
+        if has_unacknowledged_acute_answers(session, phase, answers):
+            warning = require_urgent_acknowledgement(data, *urgent_scope)
+            if warning is not None:
+                return warning
+
+        bias_answers = session["bias_answers"] if round_number else answers
+        coverage_qa = session.get("coverage_qa", [])
+        if round_number:
+            coverage_qa = coverage_qa + list(zip(questions, answers))
+        hpc_qa = session["all_qa"] + session.get("final_hpc_qa", [])
+        additional_qa = list(zip(session["bias_questions"], bias_answers)) + coverage_qa
+        review = generate_question_batch(session["complaint"], hpc_qa + additional_qa, None, session.get("planned_checks"))
+        if review is None:
+            return jsonify({"error": "coverage_check_failed"}), 502
+        if review["acute_symptoms_detected"]:
+            warning = require_urgent_acknowledgement(data, *urgent_scope)
+            if warning is not None:
+                return warning
+
+        completeness = review["completeness"]
+        needs_follow_up = (
+            review["has_required_questions"] or review["has_timing_questions"] or completeness["score"] < COVERAGE_TARGET
+        )
+        updates = {"bias_answers": bias_answers, "coverage_qa": coverage_qa, "planned_checks": review["planned_checks"]}
+        if needs_follow_up and review["questions"] and round_number < MAX_CLARIFICATION_BATCHES:
+            result = {"coverage_questions": review["questions"], "coverage_round": round_number + 1}
+            updates.update(result)
+        else:
+            transcript = build_interview_transcript({**session, **updates})
+            result = build_final_summary(session["complaint"], hpc_qa, additional_qa, completeness, transcript)
+            updates.update(final_results=result, coverage_questions=[])
+        session.update(updates, completion_submission={"round": round_number, "answers": answers, "response": result})
+        return jsonify(result)
+
+
+def build_final_summary(complaint: str, hpc_qa: list, additional_qa: list, completeness: dict, transcript: list) -> dict:
     raw = call_claude(
-        build_call4_prompt(
-            session["complaint"],
-            session["all_qa"] + session.get("final_hpc_qa", []),
-            bias_answers,
-            today_date=today_date,
-        ),
+        build_call4_prompt(complaint, hpc_qa, additional_qa, today_date=date.today().strftime("%d %B %Y")),
         max_tokens=6144,
     )
 
     if raw:
         parsed = validate_and_sort_timeline(raw)
         if not parsed.get("_parse_error"):
-            results = {**parsed, "partial": False, "interview_transcript": transcript}
-            session["final_results"] = results
-            return jsonify(results)
+            return {**parsed, "partial": False, "interview_transcript": transcript, "completeness": completeness}
 
     # Fallback: use cached intermediate data
-    fallback = {
+    return {
         "timeline_entries": [],
-        "chief_complaint_sentence": session.get("complaint", ""),
+        "chief_complaint_sentence": complaint,
         "modifying_factors": [],
         "associated_symptoms": [],
         "background": {"family_history": None, "medications": None, "travel": None, "weight_changes": None, "other": []},
-        "patient_quote": session.get("complaint", ""),
-        "completeness": None,
+        "patient_quote": complaint,
+        "completeness": completeness,
         "partial": True,
         "interview_transcript": transcript,
         "message": "We couldn't process your additional answers fully. Here's what we have — you can still export this summary.",
     }
-    session["final_results"] = fallback
-    return jsonify(fallback)
 
 
 # ---------------------------------------------------------------------------
